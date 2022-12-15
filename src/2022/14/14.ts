@@ -32,55 +32,58 @@ for (const y of parsedInput) {
   }
 }
 
-// Adds some padding.
-minX -= 20;
-maxX += 20;
-minY -= 20;
-maxY += 20;
 
-const xLength = maxX - minX + 1;
-const yLength = maxY - minY + 1;
+const start = 500;
 
-const start = 500 - minX;
+const groundY = maxY + 2;
 
-console.log(minX, maxX, minY, maxY, xLength, yLength, start);
+class Grid {
+  /**
+   * The already occupied points.
+   * 
+   * - `0`: Free
+   * - `1`: Sand
+   * - `2`: Wall
+   */
+  _grid: {
+    [_: number]: {
+      [_: number]: (0 | 1 | 2),
+    }
+  } = {};
 
-/**
- * `x` and `y` are relative and in `[min, max]`.
- */
-const relativeInput: Point[][] = parsedInput.map((l) => l.map((p) => ({ x: p.x - minX, y: p.y - minY })));
+  get(x: number, y: number): 0 | 1 | 2 {
+    return this._grid[x]?.[y] ?? 0;
+  }
 
+  set(x: number, y: number, value: 1 | 2 = 1): void {
+    if (!this._grid[x]) {
+      this._grid[x] = {};
+    }
+    this._grid[x][y] = value;
+  }
+}
 
+const map = new Grid();
 
-/**
- * The already occupied points.
- * 
- * - `0`: Free
- * - `1`: Sand
- * - `2`: Wall
- */
-const map: (0 | 1 | 2)[][] = Array.from(Array(yLength), () => new Array(xLength).fill(0));
 
 // Init the map.
-
-for (const wall of relativeInput) {
+for (const wall of parsedInput) {
   for (let i = 0; i < wall.length - 1; i++) {
     const start = wall[i];
     const end = wall[i + 1];
     if (start.x !== end.x) {
       for (let x = Math.min(start.x, end.x); x <= Math.max(start.x, end.x); x++) {
-        map[start.y][x] = 2;
+        map.set(x, start.y, 2);
       }
     } else {
       for (let y = Math.min(start.y, end.y); y <= Math.max(start.y, end.y); y++) {
-        map[y][start.x] = 2;
+        map.set(start.x, y, 2);
       }
     }
   }
 }
 
-const createSand = (): Point => ({ y: 0, x: start });
-
+const createSand = (): Point => ({ x: start, y: 0 });
 
 
 /** Sand number. */
@@ -88,7 +91,7 @@ let s = 1;
 let position = createSand();
 
 const newSand = (): Point => {
-  map[position.y][position.x] = 1;
+  map.set(position.x, position.y);
   s++;
   return createSand();
 };
@@ -100,15 +103,15 @@ const newSand = (): Point => {
  */
 const canFall = (): boolean => {
   return (
-    hasReachedAbyss()
-    || (!map[position.y + 1][position.x])
-    || (position.x > 0 && !map[position.y + 1][position.x - 1])
-    || (position.x < xLength - 1 && !map[position.y + 1][position.x + 1])
+    !hasReachedGround() && (
+      !map.get(position.x, position.y + 1)
+      || !map.get(position.x - 1, position.y + 1)
+      || !map.get(position.x + 1, position.y + 1))
   );
 }
 
-const hasReachedAbyss = (): boolean => {
-  return position.y === yLength - 1;
+const hasReachedGround = (): boolean => {
+  return position.y === groundY - 1;
 }
 
 
@@ -118,9 +121,9 @@ const hasReachedAbyss = (): boolean => {
  * @returns The new position after falling.
  */
 const fall = () => {
-  if (!map[position.y + 1][position.x]) {
+  if (!map.get(position.x, position.y + 1)) {
     position = { y: position.y + 1, x: position.x };
-  } else if (position.x > 0 && !map[position.y + 1][position.x - 1]) {
+  } else if (!map.get(position.x - 1, position.y + 1)) {
     position = { y: position.y + 1, x: position.x - 1 };
   } else {
     position = { y: position.y + 1, x: position.x + 1 };
@@ -136,7 +139,9 @@ const log = (): void => {
   //   console.log('\r\n');
   // }
 
-  console.log('s', s, 'i', i);
+  if (!(s % 10000000)) {
+    console.log('s', s, 'i', i);
+  }
   // console.log(map.map((l, y) => l.map((c, x) => {
   //   if (x === position.x && y === position.y) return '+';
   //   switch (c) {
@@ -147,16 +152,19 @@ const log = (): void => {
   // }).join('')).join('@\n'));
 }
 
+const hasReachedLimit = (): boolean => {
+  return position.x === start && position.y === 0 && !canFall();
+}
+
 while (true) {
   i++;
-  log();
-  if (hasReachedAbyss()) {
+  if (hasReachedLimit()) {
     break;
   }
   if (canFall()) {
     fall();
   } else {
-    console.log('s', s);
+    log();
     position = newSand();
   }
 }
