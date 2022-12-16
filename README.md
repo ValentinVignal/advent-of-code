@@ -10,7 +10,7 @@ npm i
 ## Run a file
 
 ```bash
-npm run run src/{year}/{day}/{day}.ts
+npm run run src/{year}/{day}/{part}.ts
 ```
 
 ## Download the .txt file
