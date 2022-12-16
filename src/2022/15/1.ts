@@ -17,41 +17,6 @@ const pairs: Pair[] = textInput.split('\n').filter((l) => l).map((line) => {
 
 });
 
-
-
-class Grid {
-  _grid: {
-    [x: number]: {
-      [y: number]: true,
-    }
-  } = {};
-
-  get(x: number, y: number): boolean {
-    return this._grid[x]?.[y] ?? false;
-  }
-
-  set(x: number, y: number): void {
-    if (!this._grid[x]) {
-      this._grid[x] = {};
-    }
-    this._grid[x][y] = true;
-  }
-
-  lineX(x: number): number[] {
-    return Object.keys(this._grid[x]).map((y) => parseInt(y));
-  }
-
-  lineY(y: number): number[] {
-    const result: number[] = [];
-    for (const [xString, yGrid] of Object.entries(this._grid)) {
-      if (Object.keys(yGrid).map((y) => parseInt(y)).includes(y)) {
-        result.push(parseInt(xString));
-      }
-    };
-    return result;
-  }
-}
-
 /**
  * The line number for the output. 
  */
@@ -61,8 +26,6 @@ const yLine = 2000000;
 const distance = (a: Point, b: Point): number => {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
-const grid = new Grid();
-grid.set(0, 0);
 
 const points = new Set<number>();
 
@@ -84,13 +47,6 @@ for (const { b } of pairs) {
     points.delete(b.x);
   }
 }
-
-
-//  3835228 < x < Infinity
-//  3835227
-//  2237091
-//  1963837
-//  1963836
 
 console.log(points.size);
 
