@@ -265,6 +265,7 @@ const simulate = (n: number): Result => {
 }
 
 const intermediateResult = simulate(5000);
+console.log(intermediateResult.maxY);
 
 
 // 1540057636876 < x < ?
