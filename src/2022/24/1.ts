@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import * as path from 'path';
 
 
-const textInput = readFileSync(path.join(__dirname, 'input.txt'), 'utf-8');
+const textInput = readFileSync(path.join(__dirname, 'input-example.txt'), 'utf-8');
 
 type BlizzardType = '>' | '<' | '^' | 'v';
 
@@ -74,26 +74,26 @@ const stringToPosition = (str: string): Position => {
   return { x, y };
 };
 
-// const log = () => {
-//   const map: string[][] = emptyMap.map((line) => [...line]);
-//   for (const { x, y, type } of blizzards) {
-//     map[y][x] = type;
-//   }
-//   for (const { x, y } of positions) {
-//     map[y][x] = 'O';
-//   }
-//   console.log(map.map((line) => line.join('')).join('\n'));
-// }
+const log = () => {
+  const map: string[][] = emptyMap.map((line) => [...line]);
+  for (const { x, y, type } of blizzards) {
+    map[y][x] = type;
+  }
+  for (const { x, y } of positions) {
+    map[y][x] = '\x1b[1m\x1b[34mO\x1b[0m';
+  }
+  console.log(map.map((line) => line.join('')).join('\n'));
+}
 
 
 let positions: Position[] = [start];
 let minute = 1;
 while (true) {
-  // if (minute < 20) {
+  if (!(minute % 10)) {
 
-  //   console.log('minute', minute);
-  //   log();
-  // }
+    console.log('minute', minute);
+    log();
+  }
 
   const newPositions: Position[] = [];
   // TODO: Stop if too far.
@@ -150,12 +150,14 @@ while (true) {
       newPositions.push(position);
     }
   }
-  if (newPositions.some((position) => position.x === end.x && position.y === end.y)) {
-    console.log('Found', minute);
-    break;
-  }
   positions = newPositions.map(positionToString).filter((str, index, arr) => arr.indexOf(str) === index).map(stringToPosition);
   blizzards = newBlizzards;
+  if (newPositions.some((position) => position.x === end.x && position.y === end.y)) {
+    console.log('minute', minute);
+    log();
+    console.log('\x1b[4m\x1b[32mFound:\x1b[0m', minute);
+    break;
+  }
   minute++;
 }
 
