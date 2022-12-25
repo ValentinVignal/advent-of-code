@@ -220,13 +220,13 @@ class Piece {
   }
 }
 
-type Result = {
-  maxY: number;
-  map: Set<number>[];
-}
 
-const simulate = (n: number): Result => {
+const simulate = (n: number): number[] => {
   const map: Set<number>[] = Array.from(Array(7), () => new Set([0]));
+  /**
+   * How much the `maxY` increases when a new piece is added.
+   */
+  const deltaYHistory: number[] = [];
   let maxY = 0;
   let jetIndex = 0;
   for (let pieceIndex = 0; pieceIndex < n; pieceIndex++) {
@@ -256,17 +256,66 @@ const simulate = (n: number): Result => {
         position.y--;
       } else {
         piece.lock(position);
-        maxY = Math.max(maxY, piece.maxY(position));
+        const newMaxY = Math.max(maxY, piece.maxY(position));
+        deltaYHistory.push(newMaxY - maxY);
+        maxY = newMaxY;
         break;
       }
     }
   }
-  return { maxY, map };
+  return deltaYHistory;
 }
 
-const intermediateResult = simulate(5000);
-console.log(intermediateResult.maxY);
+const piecesToDrop = 1000000000000;
+const intermediatePiecesToDrop = 5000; // A big enough number include at least 2 periods.
+
+const deltaYHistory = simulate(intermediatePiecesToDrop);
+
+// Find the periodicity.
+const signal = deltaYHistory.slice(1000);  // A big enough number to skip the transitive part of the signal.
+
+const findPeriodicity = (signal: number[]): number => {
+  let bestCorrelation: {
+    offset: number;
+    correlation: number;
+  } = {
+    offset: 0,
+    correlation: 0,
+  };
+  for (let offset = 1; offset < signal.length / 2; offset++) {
+    const n = signal.length - offset;
+    const sXY = signal.slice(0, n).reduce((acc, value, index) => {
+      return acc + value * signal[index + offset];
+    }, 0);
+    const sX = signal.slice(0, n).reduce((acc, value) => acc + value, 0);
+    const sY = signal.slice(offset).reduce((acc, value) => acc + value, 0);
+    const sX2 = signal.slice(0, n).reduce((acc, value) => acc + value * value, 0);
+    const sY2 = signal.slice(offset).reduce((acc, value) => acc + value * value, 0);
+
+    const correlation = ((n * sXY) - (sX * sY)) / Math.sqrt(((n * sX2) - (sX * sX)) * ((n * sY2) - (sY * sY)));
+    if (correlation > bestCorrelation.correlation) {
+      bestCorrelation = {
+        offset,
+        correlation,
+      };
+    }
+  }
+  return bestCorrelation.offset;
+}
 
 
-// 1540057636876 < x < ?
-// console.log(result); // 1540634005751
+const periodicity = findPeriodicity(signal);  // 1735
+/**
+ * The period of the signal
+ */
+const period = signal.slice(-periodicity);
+
+const numberOfPeriodsToAdd = Math.floor((piecesToDrop - intermediatePiecesToDrop) / periodicity);
+const remainingPiecesToDrop = (piecesToDrop - intermediatePiecesToDrop) % periodicity;
+
+const intermediateHeight = deltaYHistory.reduce((acc, value) => acc + value, 0);
+const periodHeight = period.reduce((acc, value) => acc + value, 0);
+const remainingHeight = period.slice(0, remainingPiecesToDrop).reduce((acc, value) => acc + value, 0);
+
+const result = intermediateHeight + numberOfPeriodsToAdd * periodHeight + remainingHeight;
+console.log(result); // 1540634005751

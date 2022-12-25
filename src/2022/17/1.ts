@@ -222,7 +222,7 @@ class Piece {
   }
 }
 
-for (let pieceIndex = 0; pieceIndex < 1000000000000; pieceIndex++) {
+for (let pieceIndex = 0; pieceIndex < 2022; pieceIndex++) {
   const piece = new Piece(pieceIndex);
   /** Left bottom corner */
   let position = { x: startX, y: startY + maxY };
