@@ -1,5 +1,7 @@
 # advent-of-code
 
+[![wakatime](https://wakatime.com/badge/user/a700230c-ba51-4378-8fbc-fbcb542401ed/project/c93eb0f3-1c1c-4a6e-b811-aee703bdd215.svg)](https://wakatime.com/badge/user/a700230c-ba51-4378-8fbc-fbcb542401ed/project/c93eb0f3-1c1c-4a6e-b811-aee703bdd215)
+
 
 ## Installation
 
