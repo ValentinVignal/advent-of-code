@@ -18,7 +18,9 @@ const possibleNNumbers = [
   "nine",
 ];
 
-const reversePossibleNNumbers = possibleNNumbers.map((n) => n.split("").reverse().join(""));
+const reversePossibleNNumbers = possibleNNumbers.map((n) =>
+  n.split("").reverse().join("")
+);
 
 const stringToNumber = (string: string): number => {
   if (!Number.isNaN(parseInt(string))) {
