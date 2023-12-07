@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "run": "ts-node"
+    "run": "ts-node",
+    "force-run": "ts-node -T"
   },
   "repository": {
     "type": "git",
