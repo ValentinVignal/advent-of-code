@@ -113,8 +113,7 @@ const countArrangements = (
 };
 
 const result = inputs
-  .map((input, i) => {
-    console.log("i", i);
+  .map((input) => {
     const knownSprings = input.state.filter((s) => s === "#").length;
     const unknownSprings = input.state.filter((s) => s === "?").length;
     const totalSprings = input.groups.reduce((acc, curr) => acc + curr, 0);
@@ -127,4 +126,4 @@ const result = inputs
   })
   .reduce((acc, curr) => acc + curr, 0);
 
-console.log(result);
+console.log(result); // 23903579139437
