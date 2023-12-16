@@ -197,7 +197,6 @@ while (scannersToPlace.length) {
     const placed = placeScan(scannerToPlaceId, placedScannerId);
 
     if (placed) {
-      // TODO: Put the
       scanners.set(scannerToPlaceId, placed[0]);
       placedScans.set(scannerToPlaceId, placed[1]);
       break;
