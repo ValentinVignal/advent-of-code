@@ -1,12 +1,7 @@
 import { readFileSync } from "fs";
-import { Plot, plot } from "nodeplotlib";
 import * as path from "path";
-import { findLineByLeastSquares } from "../../utils/linearLeastSquare";
 
-const textInput = readFileSync(
-  path.join(__dirname, "input-example.txt"),
-  "utf-8"
-);
+const textInput = readFileSync(path.join(__dirname, "input.txt"), "utf-8");
 
 console.log(textInput);
 
@@ -17,176 +12,215 @@ const input: Tile[][] = textInput
   .filter(Boolean)
   .map((line) => line.split("").filter(Boolean) as Tile[]);
 
-console.log("dimension", input[0].length, input.length);
+const steps = 26501365;
+const size = input.length;
+const halfSize = (size - 1) / 2;
+console.log("size", size, "halfSize", halfSize, "steps", steps);
 
-type Position = {
-  x: number;
-  y: number;
+type Zone<T> = {
+  middle: T;
+  topLeft: T;
+  topRight: T;
+  bottomRight: T;
+  bottomLeft: T;
 };
 
-const positionToString = (position: Position) => `${position.x},${position.y}`;
-
-const stringToPosition = (str: string): Position => {
-  const [x, y] = str.split(",").map(Number);
-  return { x, y };
+/**
+ * The number of rocks in each zone. For even and odd steps.
+ */
+const rocksPerZone: Zone<[number, number]> = {
+  middle: [0, 0],
+  topLeft: [0, 0],
+  topRight: [0, 0],
+  bottomRight: [0, 0],
+  bottomLeft: [0, 0],
 };
 
-let reachablePositions = new Set<string>();
+/**
+ * The number of possible tiles in each zone. For even and odd steps.
+ */
+const possibleTilesPerZone: Zone<[number, number]> = {
+  middle: [0, 0],
+  topLeft: [0, 0],
+  topRight: [0, 0],
+  bottomRight: [0, 0],
+  bottomLeft: [0, 0],
+};
 
+const numberOfRocks = input
+  .map((line) => line.filter((x) => x === "#").length)
+  .reduce((a, b) => a + b, 0);
+/**
+ * Number of rocks in the map for even maps.
+ */
+let numberOfRockEvenMap = 0;
+/**
+ * Number of tiles in the map for even maps.
+ */
+let possibleTileEvenMap = 0;
+/**
+ * Number of rocks in the map for odd maps.
+ */
+let numberOfRockOddMap = 0;
+/**
+ * Number of tiles in the map for odd maps.
+ */
+let possibleTileOddMap = 0;
 for (const [y, line] of input.entries()) {
   for (const [x, tile] of line.entries()) {
-    if (tile === "S") {
-      reachablePositions.add(positionToString({ x, y }));
-      break;
+    const isOdd = (x + y) % 2;
+    const isRock = tile === "#";
+    if (y < halfSize - x) {
+      possibleTilesPerZone.topLeft[isOdd]++;
+      if (isRock) {
+        rocksPerZone.topLeft[isOdd]++;
+      }
+    } else if (y > x + halfSize) {
+      possibleTilesPerZone.bottomLeft[isOdd]++;
+      if (isRock) {
+        rocksPerZone.bottomLeft[isOdd]++;
+      }
+    } else if (y < x - halfSize) {
+      possibleTilesPerZone.topRight[isOdd]++;
+      if (isRock) {
+        rocksPerZone.topRight[isOdd]++;
+      }
+    } else if (y > size + halfSize - x) {
+      possibleTilesPerZone.bottomRight[isOdd]++;
+      if (isRock) {
+        rocksPerZone.bottomRight[isOdd]++;
+      }
+    } else {
+      possibleTilesPerZone.middle[isOdd]++;
+      if (isRock) {
+        rocksPerZone.middle[isOdd]++;
+      }
     }
-  }
-  if (reachablePositions.size) {
-    break;
-  }
-}
-
-const deltas = [
-  { x: 0, y: -1 },
-  { x: 1, y: 0 },
-  { x: 0, y: 1 },
-  { x: -1, y: 0 },
-];
-
-const totalSteps = 26501365;
-
-const stepsToCompute = 500;
-const stepsToSkip = 200;
-
-const sizeHistory = [reachablePositions.size];
-
-for (let step = 0; step < stepsToCompute; step++) {
-  let newReachablePositions = new Set<string>();
-  for (const position of reachablePositions.keys()) {
-    const { x, y } = stringToPosition(position);
-    for (const delta of deltas) {
-      const newPosition = {
-        x: x + delta.x,
-        y: y + delta.y,
-      };
-
-      const basePosition = {
-        x:
-          ((newPosition.x % input[0].length) + input[0].length) %
-          input[0].length,
-        y: ((newPosition.y % input.length) + input.length) % input.length,
-      };
-      const tile = input[basePosition.y][basePosition.x];
-      if (tile !== "#") {
-        newReachablePositions.add(positionToString(newPosition));
+    if (!isOdd) {
+      possibleTileEvenMap++;
+    } else {
+      possibleTileOddMap++;
+    }
+    if (tile === "#") {
+      if (!isOdd) {
+        numberOfRockEvenMap++;
+      } else {
+        numberOfRockOddMap++;
       }
     }
   }
-
-  reachablePositions = newReachablePositions;
-  sizeHistory.push(reachablePositions.size);
 }
 
-const diffs: number[] = [];
-const diffs2: number[] = [];
-const diffDiffs: number[] = [];
-for (const [index, size] of sizeHistory.entries()) {
-  const diff = size - sizeHistory[index - 1];
-  const diff2 = size - sizeHistory[index - 2];
-  const diffDiff = diff - diffs[index - 1];
-  diffs.push(diff);
-  diffs2.push(diff2);
-  diffDiffs.push(diffDiff);
-  console.log(
-    index,
-    size,
-    "diff",
-    diff,
-    "diff2",
-    diff2,
-    "diffDiff",
-    diffDiff,
-    "diff-diff2",
-    diff2 - (sizeHistory[index - 2] - sizeHistory[index - 4])
-  );
-}
+/** The number of tiles without rocks on even maps. */
+const effectivePossibleTileEvenMap = possibleTileEvenMap - numberOfRockEvenMap;
+/** The number of tiles without rocks on odd maps. */
+const effectivePossibleTileOddMap = possibleTileOddMap - numberOfRockOddMap;
 
-const { m, b } = findLineByLeastSquares(
-  [...sizeHistory.keys()].slice(stepsToSkip),
-  sizeHistory.slice(stepsToSkip)
+console.log(
+  "numberOfRocks",
+  numberOfRocks,
+  "even",
+  numberOfRockEvenMap,
+  "odd",
+  numberOfRockOddMap,
+  "possibleTileEvenMap",
+  possibleTileEvenMap,
+  "possibleTileOddMap",
+  possibleTileOddMap,
+  "effectivePossibleTileEvenMap",
+  effectivePossibleTileEvenMap,
+  "effectivePossibleTileOddMap",
+  effectivePossibleTileOddMap
 );
 
-const data: Plot[] = [
-  {
-    x: [...sizeHistory.keys()],
-    y: sizeHistory,
-    type: "scatter",
-  },
-  {
-    x: [...sizeHistory.keys()],
-    y: [...sizeHistory.keys()].map((x) => m * x + b),
-    type: "scatter",
-  },
-];
+console.log("rocksPerZone", rocksPerZone);
+console.log("possibleTilesPerZone", possibleTilesPerZone);
+/**
+ * The number of maps that are started from the origin map (origin map is `1`).
+ */
+const mapLength = (steps - halfSize) / size + 1;
 
-plot(data);
-plot([
-  {
-    x: [...sizeHistory.keys()],
-    y: sizeHistory.map((x) => Math.log(x)),
-    type: "scatter",
-  },
-]);
+/**
+ * The number of full squares in each directions.
+ */
+const fullSquareLength = mapLength - 1;
 
-plot([
-  {
-    x: [...diffs.keys()],
-    y: diffs,
-    type: "scatter",
-  },
-]);
-plot([
-  {
-    x: [...diffs2.keys()],
-    y: diffs2,
-    type: "scatter",
-  },
-]);
+/**
+ * The number of full even squares.
+ */
+const numberOfFullEvenSquares = fullSquareLength ** 2;
+/**
+ * The number of full odd squares.
+ */
+const numberOfFullOddSquares = fullSquareLength ** 2 - 2 * fullSquareLength + 1;
 
-plot([
-  {
-    x: [...diffDiffs.keys()],
-    y: diffDiffs,
-    type: "scatter",
-  },
-]);
+console.log(
+  "numberOfFullEvenSquares",
+  numberOfFullEvenSquares,
+  "numberOfFullOddSquares",
+  numberOfFullOddSquares
+);
 
-plot([
-  {
-    x: [...diffDiffs.keys()],
-    y: diffDiffs.map((x, i) => x / i),
-    type: "scatter",
-  },
-]);
+const possibleTilesFullMaps =
+  numberOfFullEvenSquares * effectivePossibleTileEvenMap +
+  numberOfFullOddSquares * effectivePossibleTileOddMap;
 
-let period = 0;
+console.log("possibleTilesFullMaps", possibleTilesFullMaps);
 
-const numberOfPeriodsToVerify = 3;
+const effectivePossibleTilesPerZone: Zone<[number, number]> = {
+  middle: [
+    possibleTilesPerZone.middle[0] - rocksPerZone.middle[0],
+    possibleTilesPerZone.middle[1] - rocksPerZone.middle[1],
+  ],
+  topLeft: [
+    possibleTilesPerZone.topLeft[0] - rocksPerZone.topLeft[0],
+    possibleTilesPerZone.topLeft[1] - rocksPerZone.topLeft[1],
+  ],
+  bottomLeft: [
+    possibleTilesPerZone.bottomLeft[0] - rocksPerZone.bottomLeft[0],
+    possibleTilesPerZone.bottomLeft[1] - rocksPerZone.bottomLeft[1],
+  ],
+  topRight: [
+    possibleTilesPerZone.topRight[0] - rocksPerZone.topRight[0],
+    possibleTilesPerZone.topRight[1] - rocksPerZone.topRight[1],
+  ],
+  bottomRight: [
+    possibleTilesPerZone.bottomRight[0] - rocksPerZone.bottomRight[0],
+    possibleTilesPerZone.bottomRight[1] - rocksPerZone.bottomRight[1],
+  ],
+};
 
-let found = false;
-while (found) {
-  period++;
-  let isCorrect = true;
-  for (let i = 0; i < period; i++) {
-    if (!isCorrect) {
-      break;
-    }
-    for (let di = 1; di < numberOfPeriodsToVerify; di++) {
-      if (diffDiffs[i] !== diffDiffs[i - di * period]) {
-        isCorrect = false;
-        break;
-      }
-    }
-  }
-}
+const restMiddleEven =
+  effectivePossibleTilesPerZone.middle[0] * 4 * (mapLength - 1);
+console.log(3 * (mapLength - 2));
+const restEven =
+  (effectivePossibleTilesPerZone.bottomLeft[0] +
+    effectivePossibleTilesPerZone.topRight[0] +
+    effectivePossibleTilesPerZone.bottomRight[0] +
+    effectivePossibleTilesPerZone.topLeft[0]) *
+  (3 * (mapLength - 2) + 2);
+const restOdd =
+  (mapLength - 1) *
+  (effectivePossibleTilesPerZone.bottomLeft[1] +
+    effectivePossibleTilesPerZone.topLeft[0] +
+    effectivePossibleTilesPerZone.bottomRight[1] +
+    effectivePossibleTilesPerZone.topRight[0]);
 
-console.log("period", period);
+const rest = restMiddleEven + restEven + restOdd;
+
+console.log(
+  "rest",
+  rest,
+  "restMiddleEven",
+  restMiddleEven,
+  "restEven",
+  restEven,
+  "restOdd",
+  restOdd
+);
+
+const result = possibleTilesFullMaps + rest;
+
+// x < 615066203655018
+//     615069260801330
+console.log("result", result);
