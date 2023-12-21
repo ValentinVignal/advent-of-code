@@ -70,14 +70,20 @@ for (const [y, line] of input.entries()) {
   }
 }
 
-/** The number of tiles without rocks on even maps. */
+/** The number of tiles without rocks on even maps.
+ *
+ * `7545`
+ */
 const possibleTileEvenMap =
   possibleTilesPerZone.bottomLeft[0] +
   possibleTilesPerZone.topRight[0] +
   possibleTilesPerZone.bottomRight[0] +
   possibleTilesPerZone.topLeft[0] +
   possibleTilesPerZone.middle[0];
-/** The number of tiles without rocks on odd maps. */
+/** The number of tiles without rocks on odd maps.
+ *
+ * `7484`
+ */
 const possibleTileOddMap =
   possibleTilesPerZone.bottomLeft[1] +
   possibleTilesPerZone.topRight[1] +
