@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es2017",
+    "target": "es2022",
     "module": "commonjs",
     "lib": [
       "dom",
@@ -34,5 +34,5 @@
   ],
   "include": [
     "./src/**/*.ts"
-  ]
+  ],
 }
