@@ -160,6 +160,7 @@ const possibleTilesInCorners =
 const almostFullEdges =
   4 * (mapLength - 2) * possibleTilesPerZone.middle[1] +
   3 *
+    (mapLength - 2) *
     (possibleTilesPerZone.topLeft[1] +
       possibleTilesPerZone.topRight[1] +
       possibleTilesPerZone.bottomLeft[1] +
