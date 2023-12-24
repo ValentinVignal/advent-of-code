@@ -101,7 +101,7 @@ const isValidXYZ = (xyz: XYZ): boolean => {
  * The sum  `t1 + t2` where `t1` is the time of the first impact and `t2` is the
  * time of the second impact.
  */
-let tSum = 1430000; // > 840000
+let tSum = 1780000; // > 840000
 
 let result: Point | null = null;
 
