@@ -47,3 +47,13 @@ export const isPointInPlane = (plane: Plane, point: XYZ) => {
     plane.a * point.x + plane.b * point.y + plane.c * point.z + plane.d === 0
   );
 };
+
+export const equalXYZ = (a: XYZ, b: XYZ) => {
+  return a.x === b.x && a.y === b.y && a.z === b.z;
+};
+
+export const fromXYZTo3DArray = (xyz: XYZ): [number, number, number] => [
+  xyz.x,
+  xyz.y,
+  xyz.z,
+];
