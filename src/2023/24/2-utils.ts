@@ -57,3 +57,29 @@ export const fromXYZTo3DArray = (xyz: XYZ): [number, number, number] => [
   xyz.y,
   xyz.z,
 ];
+
+export const norm2Squared = (a: XYZ) => getInnerProduct(a, a);
+
+export const norm2 = (a: XYZ) => Math.sqrt(norm2Squared(a));
+
+type Line = {
+  origin: XYZ;
+  direction: XYZ;
+};
+
+/**
+ * @returns the distance between two lines.
+ */
+export const lineDistance = (a: Line, b: Line): number => {
+  const crossProduct = getCrossProduct(a.direction, b.direction);
+  const normCrossProduct = norm2(crossProduct);
+  if (!normCrossProduct) {
+    throw Error(
+      "No line are parallel or else the answer would be straightforward"
+    );
+  }
+
+  const originDifference = addXYZ(a.origin, multiplyXYZ(-1, b.origin));
+  const distance = Math.abs(getInnerProduct(crossProduct, originDifference));
+  return distance / normCrossProduct;
+};
