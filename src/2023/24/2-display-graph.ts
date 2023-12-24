@@ -85,20 +85,22 @@ console.log(
 );
 
 const selectedHails = [
-  ...hails.slice(0, 4),
-  hails[59],
-  hails[126],
-  hails[151],
-  hails[271],
+  hails[0],
+  hails[3],
+  hails[4],
+  hails[5],
+  hails[7],
+  hails[8],
+  hails[9],
 ];
 
 const firstPoint = addXYZ(
-  selectedHails[0].position,
-  multiplyXYZ(5.5e11, selectedHails[0].velocity)
+  hails[5].position,
+  multiplyXYZ(3.8e11, hails[5].velocity)
 );
 const secondPoint = addXYZ(
-  selectedHails[1].position,
-  multiplyXYZ(5e11, selectedHails[1].velocity)
+  hails[8].position,
+  multiplyXYZ(5.8e11, hails[8].velocity)
 );
 
 const points: Plot[] = [
@@ -119,9 +121,15 @@ const points: Plot[] = [
       };
     }),
   {
-    x: [firstPoint.x, secondPoint.x],
-    y: [firstPoint.y, secondPoint.y],
-    z: [firstPoint.z, secondPoint.z],
+    x: [firstPoint.x],
+    y: [firstPoint.y],
+    z: [firstPoint.z],
+    type: "scatter3d",
+  },
+  {
+    x: [secondPoint.x],
+    y: [secondPoint.y],
+    z: [secondPoint.z],
     type: "scatter3d",
   },
 ];
