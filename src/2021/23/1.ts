@@ -24,16 +24,10 @@ const doors: Doors = [
 type Hallway = Optional<ID>[];
 const hallway: Optional<ID>[] = [...Array.from({ length: 11 }, () => null)];
 
-const textInput = readFileSync(
-  path.join(__dirname, "input-example.txt"),
-  "utf-8"
-);
+const textInput = readFileSync(path.join(__dirname, "input.txt"), "utf-8");
 
 const doorIndexes = [2, 4, 6, 8] as const;
 const amphipods = ["A", "B", "C", "D"] as const;
-const possibleHallwayStops = [...hallway.keys()].filter(
-  (i) => !doorIndexes.includes(i as any)
-);
 const idMap = new Map<ID, Amphipod>();
 
 let id = 1;
@@ -60,21 +54,22 @@ type State = {
   doors: Doors;
   hallway: Hallway;
   energy: number;
-  previousStates: Omit<State, "previousStates">[];
+  previousStates?: Omit<State, "previousStates">[];
 };
+
+const enabledPrint = false;
+const includePreviousState = true;
 
 const state: State = {
   doors,
   hallway,
   energy: 0,
-  previousStates: [],
+  previousStates: includePreviousState ? [] : undefined,
 };
 
-const enabledPrint = false;
-
-const stateToString = (state: State): string => {
-  console.log("");
-
+const stateToString = (
+  state: Pick<State, "doors" | "hallway" | "previousStates">
+): string => {
   const getStateLines = (state: Pick<State, "doors" | "hallway">): string[] => [
     state.hallway.map((slot) => (slot ? slot : " ")).join(""),
     ...[0, 1]
@@ -87,7 +82,7 @@ const stateToString = (state: State): string => {
       .map((line) => `  ${line}  `),
   ];
 
-  const blocks = [...state.previousStates, state].map(getStateLines);
+  const blocks = [...(state.previousStates ?? []), state].map(getStateLines);
 
   return blocks.map((block) => block.join("\n")).join("\n  -> \n");
 };
@@ -95,7 +90,9 @@ const stateToString = (state: State): string => {
 const queue = [state];
 
 const stateToHash = (state: State): string => {
-  return `${state.doors}-${state.hallway}`;
+  return `${state.doors
+    .map((door) => door.map((i) => i ?? ".").join(""))
+    .join("")}${state.hallway.map((i) => i ?? ".").join("")}`;
 };
 
 const states = new Map<string, number>();
@@ -107,6 +104,7 @@ const amphipodToDoorIndexInHallway = (amphipod: Amphipod): DoorIndex => {
 };
 
 let bestEnergy = Number.MAX_SAFE_INTEGER;
+let bestState: Optional<State> = null;
 
 const updateBestEnergy = (state: State): void => {
   if (
@@ -118,6 +116,7 @@ const updateBestEnergy = (state: State): void => {
   ) {
     if (bestEnergy > state.energy) {
       bestEnergy = state.energy;
+      bestState = state;
     }
   }
 };
@@ -127,10 +126,9 @@ let i = 0;
 while (queue.length) {
   i++;
   const state = queue.shift()!;
-  if (!(i % 5000)) {
+  if (!(i % 100000)) {
     console.log(queue.length);
     console.log(stateToString(state));
-    console.log(state.energy);
   }
   if (state.energy > bestEnergy) continue;
   const hash = stateToHash(state);
@@ -150,7 +148,11 @@ while (queue.length) {
     const correctDoorIndex = amphipods.indexOf(label) as 0 | 1 | 2 | 3;
     const energyDelta = 10 ** correctDoorIndex;
     const newState: State = structuredClone(state);
-    newState.previousStates.push(state);
+    newState.previousStates?.push({
+      ...state,
+      // @ts-ignore
+      previousStates: undefined,
+    });
     if (newState.hallway.includes(id)) {
       // It needs to move to its door right away.
       const isDoorReady =
@@ -170,7 +172,7 @@ while (queue.length) {
         i++
       ) {
         if (i === currentIndex) continue;
-        if (hallway[i]) {
+        if (state.hallway[i]) {
           isHallwayFree = false;
           break;
         }
@@ -192,49 +194,49 @@ while (queue.length) {
       const isInCorrectDoor = newState.doors[correctDoorIndex].includes(id);
       if (
         isInCorrectDoor &&
-        newState.doors[correctDoorIndex][1] &&
-        idMap.get(newState.doors[correctDoorIndex][1]!) === label
+        (!newState.doors[correctDoorIndex][1] ||
+          idMap.get(newState.doors[correctDoorIndex][0]!) === label)
       ) {
         // It is in the correct door at the correct place.
         continue;
       } else {
-        // It is not at the correct door and needs to go out.
-        const doorIndexInHallway = amphipodToDoorIndexInHallway(label);
+        // It needs to move out.
         const currentDoorIndex = newState.doors.findIndex((door) =>
           door.includes(id)
         );
         const currentIndexInDoor = newState.doors[currentDoorIndex].indexOf(id);
+        const currentDoorIndexInHallway = doorIndexes[currentDoorIndex];
         if (currentIndexInDoor === 0 && newState.doors[currentDoorIndex][1]) {
           // It is at the bottom and the door is blocked.
           continue;
         }
         newState.doors[currentDoorIndex][currentIndexInDoor] = null;
-        for (let i = doorIndexInHallway; i < hallway.length; i++) {
+        for (let i = currentDoorIndexInHallway; i < hallway.length; i++) {
           if (newState.hallway[i]) {
             break;
           }
-          if (!possibleHallwayStops.includes(i)) {
+          if (doorIndexes.includes(i as any)) {
             continue;
           }
           const movedState = structuredClone(newState);
           movedState.hallway[i] = id;
-          movedState.doors[currentDoorIndex][currentIndexInDoor] = null;
           movedState.energy +=
-            (2 - currentIndexInDoor + (i - doorIndexInHallway)) * energyDelta;
+            (i - currentDoorIndexInHallway + (2 - currentIndexInDoor)) *
+            energyDelta;
           queue.push(movedState);
         }
-        for (let i = doorIndexInHallway; i >= 0; i--) {
-          if (newState.hallway[i]) {
+        for (let j = currentDoorIndexInHallway; j >= 0; j--) {
+          if (newState.hallway[j]) {
             break;
           }
-          if (!possibleHallwayStops.includes(i)) {
+          if (doorIndexes.includes(j as any)) {
             continue;
           }
           const movedState = structuredClone(newState);
-          movedState.hallway[i] = id;
-          movedState.doors[currentDoorIndex][currentIndexInDoor] = null;
+          movedState.hallway[j] = id;
           movedState.energy +=
-            (2 - currentIndexInDoor + (doorIndexInHallway - i)) * energyDelta;
+            (currentDoorIndexInHallway - j + (2 - currentIndexInDoor)) *
+            energyDelta;
           queue.push(movedState);
         }
       }
@@ -244,3 +246,5 @@ while (queue.length) {
 
 // x < 15127
 console.log(bestEnergy);
+console.log(stateToString(bestState!));
+console.log(i);
