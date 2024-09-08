@@ -245,6 +245,6 @@ while (queue.length) {
 }
 
 // x < 15127
-console.log(bestEnergy);
+console.log(bestEnergy); // 15109
 console.log(stateToString(bestState!));
 console.log(i);
