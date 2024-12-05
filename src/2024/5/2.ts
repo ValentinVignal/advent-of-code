@@ -63,5 +63,4 @@ for (const update of updates) {
   result += middleElement;
 }
 
-// x != 5806
-console.log(result); // 5991
+console.log(result); // 5479
