@@ -1,10 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const textInput = readFileSync(
-  path.join(__dirname, "input-example.txt"),
-  "utf-8"
-);
+const textInput = readFileSync(path.join(__dirname, "input.txt"), "utf-8");
 
 type XY = {
   x: number;
@@ -35,58 +32,40 @@ const machines: Machine[] = textInput
     return {
       a: { x: a[0], y: a[1] },
       b: { x: b[0], y: b[1] },
-      x: { x: x[0], y: x[1] },
+      x: { x: x[0] + 10000000000000, y: x[1] + 10000000000000 },
     };
   });
-
-enum Button {
-  A = "a",
-  B = "b",
-}
 
 type AB = {
   a: number;
   b: number;
 };
 
-const getButtonPushes = (machine: Machine): AB => {
-  type HV = { h: number; v: number };
-
-  // Express canonical vectors from a and b.
-
-  const mostHorizontal =
-    Math.abs(machine.a.x / machine.a.y) > Math.abs(machine.b.x / machine.b.y)
-      ? Button.A
-      : Button.B;
-
-  const mostVertical = mostHorizontal === Button.A ? Button.B : Button.A;
-
-  const h = machine[mostHorizontal];
-  const v = machine[mostVertical];
-
-  const xDenominator = h.x - (h.y * v.x) / v.y;
-  let vectorX: HV = {
-    h: 1 / xDenominator,
-    v: h.y / (v.y * xDenominator),
-  };
-
-  const yDenominator = v.y - (v.x * h.y) / h.x;
-  let vectorY: HV = {
-    h: v.x / (h.x * yDenominator),
-    v: 1 / yDenominator,
-  };
-
-  const hCount = machine.x.x * vectorX.h + machine.x.y * vectorY.h;
-  const vCount = machine.x.x * vectorX.v + machine.x.y * vectorY.v;
-
+const getButtonPushes = ({ a, b, x }: Machine): AB => {
+  const bPushes = (x.y - (x.x * a.y) / a.x) / (b.y - (a.y * b.x) / a.x);
+  const aPushes = x.x / a.x - (b.x / a.x) * bPushes;
   return {
-    [mostHorizontal]: hCount,
-    [mostVertical]: vCount,
-  } as AB;
+    a: aPushes,
+    b: bPushes,
+  };
 };
+
+const epsilon = 1e-6;
+
+let result = 0;
 
 for (const machine of machines) {
   const { a, b } = getButtonPushes(machine);
 
-  console.log(a, b);
+  if (
+    Math.abs(a - Math.round(a)) > epsilon ||
+    Math.abs(b - Math.round(b)) > epsilon
+  )
+    continue;
+  if (a + epsilon < 0 || b + epsilon < 0) continue;
+  if (a - epsilon > 100 || b - epsilon > 100) continue;
+
+  result += 3 * Math.round(a) + Math.round(b);
 }
+
+console.log(result); // 31552
