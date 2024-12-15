@@ -36,8 +36,6 @@ const size: XY = {
 
 const addXY = (a: XY, b: XY): XY => ({ x: a.x + b.x, y: a.y + b.y });
 
-const multiplyXY = (a: XY, b: number): XY => ({ x: a.x * b, y: a.y * b });
-
 const moduloXY = (a: XY, b: XY): XY => ({ x: a.x % b.x, y: a.y % b.y });
 
 const getNewPosition = (robot: Robot): Robot => {
@@ -50,51 +48,27 @@ const getNewPosition = (robot: Robot): Robot => {
   };
 };
 
-const xyToString = (xy: XY): string => `${xy.x},${xy.y}`;
-
 let maxScore = 0;
-
-const norm = (v: XY): number => {
-  const origin = { x: (size.x - 1) / 2, y: size.y - 1 };
-  const vFromOrigin = addXY(v, multiplyXY(origin, -1));
-  const normalizedV = {
-    x: Math.abs(vFromOrigin.x) / (size.x - 1),
-    y: Math.abs(vFromOrigin.y) / (size.y - 1),
-  };
-
-  const n = 1 - (normalizedV.x + normalizedV.y) / 2;
-
-  return n;
-};
 
 /**
  * A Christmas tree is vertically symmetrical.
  */
 const couldBeChristmasTree = (): boolean => {
-  const quadrants = Array.from({ length: 10 }).map(() =>
-    Array.from({ length: 10 }).map(() => new Set<string>())
-  );
+  const score = robots
+    .map(({ position: { x, y } }) => ({ x: x / size.x, y: y / size.y }))
+    .filter(({ x, y }) => {
+      if (x <= 0.5) {
+        return y >= 1 - 2 * x;
+      } else {
+        return y >= 2 * (x - 0.5);
+      }
+    }).length;
 
-  // Fill the quadrants.
-  for (const { position } of robots) {
-    let y = Math.floor(position.y / 10);
-    y = Math.min(y, 9);
-    let x = position.x;
-    if (x === (size.x - 1) / 2) continue;
-    if (x > (size.x - 1) / 2) x--;
-    x = Math.floor(x / 10);
-    quadrants[y][x].add(xyToString(position));
+  if (maxScore < score) {
+    maxScore = score;
   }
-
-  let score = 0;
-
-  for (const { position } of robots) {
-    score += norm(position);
-  }
-
-  if (score > maxScore) maxScore = score;
   if (score > 0.95 * maxScore) {
-    console.log("could be christmas tree", score, maxScore);
+    logMap();
     return true;
   }
   return false;
@@ -128,3 +102,6 @@ while (true) {
     logMap();
   }
 }
+
+// 6950 < x
+// x = 7051
