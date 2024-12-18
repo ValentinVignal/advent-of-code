@@ -1,7 +1,10 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const textInput = readFileSync(path.join(__dirname, `input.txt`), "utf-8");
+const textInput = readFileSync(
+  path.join(__dirname, `input-example.txt`),
+  "utf-8"
+);
 
 type Registers = {
   a: number;
@@ -49,6 +52,12 @@ const instructions: Instruction[] = programText
     };
   });
 
+const unsuccessfulStates = new Set<string>();
+
+const stateToString = ({ a, b, c }: Registers, outputLength: number) => {
+  return `${a},${b},${c},${outputLength}`;
+};
+
 let registerA = -1;
 while (true) {
   registerA++;
@@ -60,6 +69,8 @@ while (true) {
     ...initialRegisters,
     a: registerA,
   };
+
+  const visitedStates = new Set<string>();
 
   const outputs: number[] = [];
 
@@ -132,10 +143,19 @@ while (true) {
       (r) => r >= 0 && Number.isInteger(r)
     )
   ) {
+    if (!instructionIndex) {
+      if (unsuccessfulStates.has(stateToString(registers, outputs.length))) {
+        break;
+      }
+      visitedStates.add(stateToString(registers, outputs.length));
+    }
     runInstruction();
   }
 
   if (getInstruction() || programText !== outputs.join(",")) {
+    for (const visitedState of visitedStates) {
+      unsuccessfulStates.add(visitedState);
+    }
     continue;
   } else {
     break;
