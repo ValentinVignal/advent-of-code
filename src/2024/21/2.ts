@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = true;
+const example = false;
 
 const textInput = readFileSync(
   path.join(__dirname, `input${example ? "-example" : ""}.txt`),
@@ -16,24 +16,11 @@ type NumericCode = Digit[];
 
 type KeyPadCode = KeyPadButton[];
 
-type Optional<T> = T | null;
-
 const numberOfDirectionalKeyPads = 25;
 
 const codes: NumericCode[] = textInput
   .split("\n")
   .map((line) => line.split("").filter(Boolean) as Digit[]);
-
-enum FirstDirection {
-  vertical = "vertical",
-  horizontal = "horizontal",
-}
-
-type Move = {
-  vertical: number;
-  horizontal: number;
-  firstDirection: Optional<FirstDirection>;
-};
 
 const numericKeyPad = [
   ["7", "8", "9"],
@@ -52,14 +39,15 @@ type XY = {
   y: number;
 };
 
+const equalsXY = (a: XY, b: XY): boolean => a.x === b.x && a.y === b.y;
+
 /**
  * Gives the position of a digit on the numeric key pad.
  */
-const numericPadButtonPositionMap = new Map<Digit, XY>();
+const numericPadButtonPositionMap = new Map<Digit | null, XY>();
 
 for (const [y, row] of numericKeyPad.entries()) {
   for (const [x, button] of row.entries()) {
-    if (button === null) continue;
     numericPadButtonPositionMap.set(button, { x, y });
   }
 }
@@ -67,10 +55,9 @@ for (const [y, row] of numericKeyPad.entries()) {
 /**
  * Gives the position of a button on the directional key pad.
  */
-const directionalKeyPadButtonPositionMap = new Map<KeyPadButton, XY>();
+const directionalKeyPadButtonPositionMap = new Map<KeyPadButton | null, XY>();
 for (const [y, row] of directionalKeyPad.entries()) {
   for (const [x, button] of row.entries()) {
-    if (button === null) continue;
     directionalKeyPadButtonPositionMap.set(button, { x, y });
   }
 }
@@ -98,75 +85,58 @@ const countNumericKeyPad = new Map<NumericalKey, number>();
  */
 const countDirectionKeyPads = new Map<DirectionalKey, number>();
 
-const findMoveNumeric = (from: XY, to: XY): Move => {
-  const horizontal = to.x - from.x;
-  const vertical = to.y - from.y;
-  let firstDirection: Optional<FirstDirection> = null;
-
-  if (
-    horizontal &&
-    vertical &&
-    !Math.min(from.x, to.x) &&
-    Math.max(from.y, to.y) === 3
-  ) {
-    // It needs to avoid the bottom left gap.
-    if (vertical < 0) {
-      firstDirection = FirstDirection.vertical;
-    } else {
-      firstDirection = FirstDirection.horizontal;
-    }
-  }
-
-  return { horizontal, vertical, firstDirection };
-};
-
-const findMoveDirectional = (from: XY, to: XY): Move => {
-  const horizontal = to.x - from.x;
-  const vertical = to.y - from.y;
-  let firstDirection: Optional<FirstDirection> = null;
-
-  if (
-    horizontal &&
-    vertical &&
-    !Math.min(from.x, to.x) &&
-    !Math.max(from.y, to.y)
-  ) {
-    // It needs to avoid the top left gap.
-    if (vertical < 0) {
-      firstDirection = FirstDirection.horizontal;
-    } else {
-      firstDirection = FirstDirection.vertical;
-    }
-  }
-
-  return { horizontal, vertical, firstDirection };
-};
-
-/**
- * Gives the possible keypad button to press do a move.
- */
-const moveToKeyPadCodes = (move: Move): KeyPadCode[] => {
-  const { horizontal, vertical, firstDirection } = move;
-
-  const verticalMoves = (vertical > 0 ? "v" : "^")
-    .repeat(Math.abs(vertical))
-    .split("")
-    .filter(Boolean) as KeyPadCode;
-  const horizontalMoves = (horizontal > 0 ? ">" : "<")
-    .repeat(Math.abs(horizontal))
-    .split("")
-    .filter(Boolean) as KeyPadCode;
-
+const generateKeyPadCodes = (
+  from: XY,
+  to: XY,
+  forbiddenXY: XY
+): KeyPadCode[] => {
   const codes: KeyPadCode[] = [];
-  if (firstDirection !== FirstDirection.horizontal && vertical) {
-    codes.push([...verticalMoves, ...horizontalMoves, "A"]);
-  }
-  if (firstDirection !== FirstDirection.vertical && horizontal) {
-    codes.push([...horizontalMoves, ...verticalMoves, "A"]);
-  }
-  if (!horizontal && !vertical) {
-    codes.push(["A"]);
-  }
+
+  const vertical = to.y - from.y;
+  const horizontal = to.x - from.x;
+
+  const verticalChar = vertical > 0 ? "v" : ("^" as KeyPadButton);
+  const horizontalChar = horizontal > 0 ? ">" : ("<" as KeyPadButton);
+
+  const verticalAbs = Math.abs(vertical);
+  const horizontalAbs = Math.abs(horizontal);
+
+  const generate = (
+    acc: KeyPadCode,
+    currentXY: XY,
+    remainingVertical: number,
+    remainingHorizontal: number
+  ) => {
+    if (equalsXY(currentXY, forbiddenXY)) return;
+    if (!remainingVertical && !remainingHorizontal) {
+      codes.push([...acc, "A"]);
+      return;
+    }
+
+    if (remainingVertical) {
+      const nextVertical = remainingVertical - 1;
+      const nextAcc = [...acc, verticalChar];
+      generate(
+        nextAcc,
+        { ...currentXY, y: currentXY.y + Math.sign(vertical) },
+        nextVertical,
+        remainingHorizontal
+      );
+    }
+
+    if (remainingHorizontal) {
+      const nextHorizontal = remainingHorizontal - 1;
+      const nextAcc = [...acc, horizontalChar];
+      generate(
+        nextAcc,
+        { ...currentXY, x: currentXY.x + Math.sign(horizontal) },
+        remainingVertical,
+        nextHorizontal
+      );
+    }
+  };
+
+  generate([], from, verticalAbs, horizontalAbs);
 
   return codes;
 };
@@ -183,8 +153,11 @@ const getCountDirectionalKeyPad = (
   // We need to compute it.
   const fromXY = directionalKeyPadButtonPositionMap.get(from)!;
   const toXY = directionalKeyPadButtonPositionMap.get(to)!;
-  const move = findMoveDirectional(fromXY, toXY);
-  const possibleCodes = moveToKeyPadCodes(move);
+  const possibleCodes = generateKeyPadCodes(
+    fromXY,
+    toXY,
+    directionalKeyPadButtonPositionMap.get(null)!
+  );
   const lengths = possibleCodes.map((code) => {
     if (!depth) return code.length;
     return getCountDirectionalKeyPadCode(code, depth - 1);
@@ -221,8 +194,11 @@ const getCountNumericKeyPad = (from: Digit, to: Digit): number => {
   // We need to compute it.
   const fromXY = numericPadButtonPositionMap.get(from)!;
   const toXY = numericPadButtonPositionMap.get(to)!;
-  const move = findMoveNumeric(fromXY, toXY);
-  const possibleCodes = moveToKeyPadCodes(move);
+  const possibleCodes = generateKeyPadCodes(
+    fromXY,
+    toXY,
+    numericPadButtonPositionMap.get(null)!
+  );
   const count = Math.min(
     ...possibleCodes.map((code) =>
       getCountDirectionalKeyPadCode(code, numberOfDirectionalKeyPads - 1)
@@ -260,7 +236,7 @@ const complexities = codes.map((code) => {
 const result = complexities.reduce((sum, complexity) => sum + complexity, 0);
 
 // 153191605803106 < x < 373023775945012
-console.log(result);
+console.log(result); // 251508572750680
 
 // Correct answers for example inputs:
 // 154115708116294
