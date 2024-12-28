@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = false;
+const example = true;
 
 const textInput = readFileSync(
   path.join(__dirname, `input${example ? "-example" : ""}.txt`),
@@ -12,13 +12,15 @@ type Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "A";
 
 type KeyPadButton = "^" | "v" | "<" | ">" | "A";
 
-type Code = Digit[];
+type NumericCode = Digit[];
+
+type KeyPadCode = KeyPadButton[];
 
 type Optional<T> = T | null;
 
-const numberOfDirectionalKeyPads = 2;
+const numberOfDirectionalKeyPads = 25;
 
-const codes: Code[] = textInput
+const codes: NumericCode[] = textInput
   .split("\n")
   .map((line) => line.split("").filter(Boolean) as Digit[]);
 
@@ -143,30 +145,30 @@ const findMoveDirectional = (from: XY, to: XY): Move => {
 /**
  * Gives the possible keypad button to press do a move.
  */
-const moveToKeyPadCode = (move: Move): KeyPadButton[][] => {
+const moveToKeyPadCodes = (move: Move): KeyPadCode[] => {
   const { horizontal, vertical, firstDirection } = move;
 
   const verticalMoves = (vertical > 0 ? "v" : "^")
     .repeat(Math.abs(vertical))
     .split("")
-    .filter(Boolean) as KeyPadButton[];
+    .filter(Boolean) as KeyPadCode;
   const horizontalMoves = (horizontal > 0 ? ">" : "<")
     .repeat(Math.abs(horizontal))
     .split("")
-    .filter(Boolean) as KeyPadButton[];
+    .filter(Boolean) as KeyPadCode;
 
-  const code: KeyPadButton[][] = [];
+  const codes: KeyPadCode[] = [];
   if (firstDirection !== FirstDirection.horizontal && vertical) {
-    code.push([...verticalMoves, ...horizontalMoves, "A"]);
+    codes.push([...verticalMoves, ...horizontalMoves, "A"]);
   }
   if (firstDirection !== FirstDirection.vertical && horizontal) {
-    code.push([...horizontalMoves, ...verticalMoves, "A"]);
+    codes.push([...horizontalMoves, ...verticalMoves, "A"]);
   }
   if (!horizontal && !vertical) {
-    code.push(["A"]);
+    codes.push(["A"]);
   }
 
-  return code;
+  return codes;
 };
 
 const getCountDirectionalKeyPad = (
@@ -182,7 +184,7 @@ const getCountDirectionalKeyPad = (
   const fromXY = directionalKeyPadButtonPositionMap.get(from)!;
   const toXY = directionalKeyPadButtonPositionMap.get(to)!;
   const move = findMoveDirectional(fromXY, toXY);
-  const possibleCodes = moveToKeyPadCode(move);
+  const possibleCodes = moveToKeyPadCodes(move);
   const lengths = possibleCodes.map((code) => {
     if (!depth) return code.length;
     return getCountDirectionalKeyPadCode(code, depth - 1);
@@ -194,7 +196,7 @@ const getCountDirectionalKeyPad = (
 };
 
 const getCountDirectionalKeyPadCode = (
-  code: KeyPadButton[],
+  code: KeyPadCode,
   depth: number
 ): number => {
   let count = 0;
@@ -220,7 +222,7 @@ const getCountNumericKeyPad = (from: Digit, to: Digit): number => {
   const fromXY = numericPadButtonPositionMap.get(from)!;
   const toXY = numericPadButtonPositionMap.get(to)!;
   const move = findMoveNumeric(fromXY, toXY);
-  const possibleCodes = moveToKeyPadCode(move);
+  const possibleCodes = moveToKeyPadCodes(move);
   const count = Math.min(
     ...possibleCodes.map((code) =>
       getCountDirectionalKeyPadCode(code, numberOfDirectionalKeyPads - 1)
@@ -232,7 +234,7 @@ const getCountNumericKeyPad = (from: Digit, to: Digit): number => {
 };
 
 /** Returns the count of presses needed to enter a code. */
-const getCountFromCode = (code: Code): number => {
+const getCountFromCode = (code: NumericCode): number => {
   let count = 0;
   let from: Digit = "A";
   for (const to of code) {
@@ -244,7 +246,7 @@ const getCountFromCode = (code: Code): number => {
 };
 
 /** Returns the numeric part of the code. */
-const getNumeric = (code: Code): number => {
+const getNumeric = (code: NumericCode): number => {
   return parseInt(code.slice(0, 3).join(""));
 };
 
@@ -259,3 +261,12 @@ const result = complexities.reduce((sum, complexity) => sum + complexity, 0);
 
 // 153191605803106 < x < 373023775945012
 console.log(result);
+
+// Correct answers for example inputs:
+// 154115708116294
+// lengths:
+// 82050061710
+// 72242026390
+// 81251039228
+// 80786362258
+// 77985628636
