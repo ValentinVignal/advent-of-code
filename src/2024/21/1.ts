@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = true;
+const example = false;
 
 const textInput = readFileSync(
   path.join(__dirname, `input${example ? "-example" : ""}.txt`),
@@ -20,15 +20,15 @@ const codes: Code[] = textInput
   .split("\n")
   .map((line) => line.split("").filter(Boolean) as Digit[]);
 
-enum FirstToMove {
+enum FirstDirection {
   vertical = "vertical",
   horizontal = "horizontal",
 }
 
-type ShortestPath = {
+type Move = {
   vertical: number;
   horizontal: number;
-  firstToMove: Optional<FirstToMove>;
+  firstDirection: Optional<FirstDirection>;
 };
 
 const numericKeyPad = [
@@ -71,10 +71,30 @@ for (const [y, row] of directionalKeyPad.entries()) {
   }
 }
 
-const findShortestNumericPath = (from: XY, to: XY): ShortestPath => {
+type Key<T extends string> = `${T}${T}`;
+
+const fromToKey = <T extends string>(from: T, to: T): Key<T> => `${from}${to}`;
+
+/**
+ * Gives the number of presses needed to click on a button starting from another
+ * button on the numeric key pad.
+ */
+const countNumericKeyPad = new Map<Key<Digit>, number>();
+/**
+ * Gives the number of presses needed to click on a button starting from another
+ * button on the first directional key pad.
+ */
+const countDirectionKeyPad1 = new Map<Key<KeyPadButton>, number>();
+/**
+ * Gives the number of presses needed to click on a button starting from another
+ * button on the second direction key pad.
+ */
+const countDirectionKeyPad2 = new Map<Key<KeyPadButton>, number>();
+
+const findMoveNumeric = (from: XY, to: XY): Move => {
   const horizontal = to.x - from.x;
   const vertical = to.y - from.y;
-  let firstToMove: Optional<FirstToMove> = null;
+  let firstDirection: Optional<FirstDirection> = null;
 
   if (
     horizontal &&
@@ -84,19 +104,19 @@ const findShortestNumericPath = (from: XY, to: XY): ShortestPath => {
   ) {
     // It needs to avoid the bottom left gap.
     if (vertical < 0) {
-      firstToMove = FirstToMove.vertical;
+      firstDirection = FirstDirection.vertical;
     } else {
-      firstToMove = FirstToMove.horizontal;
+      firstDirection = FirstDirection.horizontal;
     }
   }
 
-  return { horizontal, vertical, firstToMove };
+  return { horizontal, vertical, firstDirection };
 };
 
-const findShortestDirectionalPath = (from: XY, to: XY): ShortestPath => {
+const findMoveDirectional = (from: XY, to: XY): Move => {
   const horizontal = to.x - from.x;
   const vertical = to.y - from.y;
-  let firstToMove: Optional<FirstToMove> = null;
+  let firstDirection: Optional<FirstDirection> = null;
 
   if (
     horizontal &&
@@ -106,22 +126,20 @@ const findShortestDirectionalPath = (from: XY, to: XY): ShortestPath => {
   ) {
     // It needs to avoid the top left gap.
     if (vertical < 0) {
-      firstToMove = FirstToMove.horizontal;
+      firstDirection = FirstDirection.horizontal;
     } else {
-      firstToMove = FirstToMove.vertical;
+      firstDirection = FirstDirection.vertical;
     }
   }
 
-  return { horizontal, vertical, firstToMove };
+  return { horizontal, vertical, firstDirection };
 };
 
-const transformShortestPathToKeyPadCode = (
-  shortestPath: ShortestPath[]
-): KeyPadButton[][] => {
-  if (!shortestPath.length) return [[]];
-  const [{ horizontal, vertical, firstToMove }, ...rest] = shortestPath;
-
-  const restResult = transformShortestPathToKeyPadCode(rest);
+/**
+ * Gives the possible keypad button to press do a move.
+ */
+const moveToKeyPadCode = (move: Move): KeyPadButton[][] => {
+  const { horizontal, vertical, firstDirection } = move;
 
   const verticalMoves = (vertical > 0 ? "v" : "^")
     .repeat(Math.abs(vertical))
@@ -132,98 +150,123 @@ const transformShortestPathToKeyPadCode = (
     .split("")
     .filter(Boolean) as KeyPadButton[];
 
-  const firstKeyPadCode: KeyPadButton[][] = [];
-  if (firstToMove !== FirstToMove.horizontal && vertical) {
-    firstKeyPadCode.push([...verticalMoves, ...horizontalMoves, "A"]);
+  const code: KeyPadButton[][] = [];
+  if (firstDirection !== FirstDirection.horizontal && vertical) {
+    code.push([...verticalMoves, ...horizontalMoves, "A"]);
   }
-  if (firstToMove !== FirstToMove.vertical && horizontal) {
-    firstKeyPadCode.push([...horizontalMoves, ...verticalMoves, "A"]);
+  if (firstDirection !== FirstDirection.vertical && horizontal) {
+    code.push([...horizontalMoves, ...verticalMoves, "A"]);
   }
   if (!horizontal && !vertical) {
-    firstKeyPadCode.push(["A"]);
+    code.push(["A"]);
   }
 
-  const keyPadCode: KeyPadButton[][] = [];
-  for (const first of firstKeyPadCode) {
-    for (const rest of restResult) {
-      keyPadCode.push([...first, ...rest]);
-    }
+  return code;
+};
+
+const getCountDirectionalKeyPad2 = (
+  from: KeyPadButton,
+  to: KeyPadButton
+): number => {
+  const key = fromToKey(from, to);
+
+  if (countDirectionKeyPad2.has(key)) return countDirectionKeyPad2.get(key)!;
+
+  // We need to compute it.
+  const fromXY = directionalKeyPadButtonPositionMap.get(from)!;
+  const toXY = directionalKeyPadButtonPositionMap.get(to)!;
+  const move = findMoveDirectional(fromXY, toXY);
+  const possibleCodes = moveToKeyPadCode(move);
+  const count = Math.min(...possibleCodes.map((code) => code.length));
+
+  countDirectionKeyPad2.set(key, count);
+  return count;
+};
+
+const getCountDirectionalKeyPadCode2 = (code: KeyPadButton[]): number => {
+  let count = 0;
+  let from: KeyPadButton = "A";
+  for (const to of code) {
+    count += getCountDirectionalKeyPad2(from, to);
+    from = to;
   }
 
-  return keyPadCode;
+  return count;
 };
 
-const findShortestPathForKeyPad = (
-  keyPadCode: KeyPadButton[]
-): ShortestPath[] => {
-  let position = directionalKeyPadButtonPositionMap.get("A")!;
-  const shortestPath: ShortestPath[] = [];
+const getCountDirectionalKeyPad1 = (
+  from: KeyPadButton,
+  to: KeyPadButton
+): number => {
+  const key = fromToKey(from, to);
 
-  for (const button of keyPadCode) {
-    const nextPosition = directionalKeyPadButtonPositionMap.get(button)!;
-    const path = findShortestDirectionalPath(position, nextPosition);
-    shortestPath.push(path);
-    position = nextPosition;
+  if (countDirectionKeyPad1.has(key)) return countDirectionKeyPad1.get(key)!;
+
+  // We need to compute it.
+  const fromXY = directionalKeyPadButtonPositionMap.get(from)!;
+  const toXY = directionalKeyPadButtonPositionMap.get(to)!;
+  const move = findMoveDirectional(fromXY, toXY);
+  const possibleCodes = moveToKeyPadCode(move);
+  const count = Math.min(...possibleCodes.map(getCountDirectionalKeyPadCode2));
+
+  countDirectionKeyPad1.set(key, count);
+  return count;
+};
+
+const getCountDirectionalKeyPadCode1 = (code: KeyPadButton[]): number => {
+  let count = 0;
+  let from: KeyPadButton = "A";
+  for (const to of code) {
+    count += getCountDirectionalKeyPad1(from, to);
+    from = to;
   }
-  return shortestPath;
+
+  return count;
 };
 
-const findShortestPathForCode = (code: Code): ShortestPath[] => {
-  let position = numericPadButtonPositionMap.get("A")!;
+/**
+ * Gives the number of presses needed to click on a button starting from another
+ * one.
+ */
+const getCountNumericKeyPad = (from: Digit, to: Digit): number => {
+  const key = fromToKey(from, to);
 
-  const shortestPath: ShortestPath[] = [];
-  for (const digit of code) {
-    const nextPosition = numericPadButtonPositionMap.get(digit)!;
-    const path = findShortestNumericPath(position, nextPosition);
+  if (countNumericKeyPad.has(key)) return countNumericKeyPad.get(key)!;
 
-    shortestPath.push(path);
-    position = nextPosition;
+  // We need to compute it.
+  const fromXY = numericPadButtonPositionMap.get(from)!;
+  const toXY = numericPadButtonPositionMap.get(to)!;
+  const move = findMoveNumeric(fromXY, toXY);
+  const possibleCodes = moveToKeyPadCode(move);
+  const count = Math.min(...possibleCodes.map(getCountDirectionalKeyPadCode1));
+
+  countNumericKeyPad.set(key, count);
+  return count;
+};
+
+/** Returns the count of presses needed to enter a code. */
+const getCountFromCode = (code: Code): number => {
+  let count = 0;
+  let from: Digit = "A";
+  for (const to of code) {
+    count += getCountNumericKeyPad(from, to);
+    from = to;
   }
 
-  return shortestPath;
+  return count;
 };
 
-const keepSmallestKeyPadCombinations = (
-  moves: KeyPadButton[][]
-): KeyPadButton[][] => {
-  const minPressCount = Math.min(
-    ...moves.map((combinations) => combinations.length)
-  );
-  return moves.filter((combinations) => combinations.length === minPressCount);
-};
-
-const findPresses = (code: Code): KeyPadButton[][] => {
-  const numericPath = findShortestPathForCode(code);
-  const keyPadCodes = keepSmallestKeyPadCombinations(
-    transformShortestPathToKeyPadCode(numericPath)
-  );
-  const pathOnKeyPad = keyPadCodes.map(findShortestPathForKeyPad);
-  const keyPadCodes2 = keepSmallestKeyPadCombinations(
-    pathOnKeyPad
-      .map(transformShortestPathToKeyPadCode)
-      .reduce((acc, val) => acc.concat(val), [])
-  );
-  const pathOnKeyPad2 = keyPadCodes2.map(findShortestPathForKeyPad);
-  const finalPresses = pathOnKeyPad2
-    .map(transformShortestPathToKeyPadCode)
-    .reduce((acc, val) => acc.concat(val), []);
-  return keepSmallestKeyPadCombinations(finalPresses);
-};
-
+/** Returns the numeric part of the code. */
 const getNumeric = (code: Code): number => {
   return parseInt(code.slice(0, 3).join(""));
 };
 
-let result = 0;
+const complexities = codes.map((code) => {
+  const numeric = getNumeric(code);
+  const count = getCountFromCode(code);
+  return count * numeric;
+});
 
-for (const code of codes) {
-  const presses = findPresses(code);
-  const minPressCount = Math.min(
-    ...presses.map((combinations) => combinations.length)
-  );
-  console.log(minPressCount, getNumeric(code));
-  result += minPressCount * getNumeric(code);
-}
+const result = complexities.reduce((sum, complexity) => sum + complexity, 0);
 
-// 204430 < x
-console.log(result);
+console.log(result); // 206798
