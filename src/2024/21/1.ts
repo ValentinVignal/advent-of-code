@@ -117,27 +117,39 @@ const findShortestDirectionalPath = (from: XY, to: XY): ShortestPath => {
 
 const transformShortestPathToKeyPadCode = (
   shortestPath: ShortestPath[]
-): KeyPadButton[] => {
-  const keyPadCode: KeyPadButton[] = [];
-  for (const path of shortestPath) {
-    let { horizontal, vertical, firstToMove } = path;
+): KeyPadButton[][] => {
+  if (!shortestPath.length) return [[]];
+  const [{ horizontal, vertical, firstToMove }, ...rest] = shortestPath;
 
-    const verticalMoves = (vertical > 0 ? "v" : "^")
-      .repeat(Math.abs(vertical))
-      .split("")
-      .filter(Boolean) as KeyPadButton[];
-    const horizontalMoves = (horizontal > 0 ? ">" : "<")
-      .repeat(Math.abs(horizontal))
-      .split("")
-      .filter(Boolean) as KeyPadButton[];
-    if (firstToMove === FirstToMove.vertical) {
-      keyPadCode.push(...verticalMoves, ...horizontalMoves);
-    } else {
-      keyPadCode.push(...verticalMoves, ...horizontalMoves);
-    }
+  const restResult = transformShortestPathToKeyPadCode(rest);
 
-    keyPadCode.push("A");
+  const verticalMoves = (vertical > 0 ? "v" : "^")
+    .repeat(Math.abs(vertical))
+    .split("")
+    .filter(Boolean) as KeyPadButton[];
+  const horizontalMoves = (horizontal > 0 ? ">" : "<")
+    .repeat(Math.abs(horizontal))
+    .split("")
+    .filter(Boolean) as KeyPadButton[];
+
+  const firstKeyPadCode: KeyPadButton[][] = [];
+  if (firstToMove !== FirstToMove.horizontal && vertical) {
+    firstKeyPadCode.push([...verticalMoves, ...horizontalMoves, "A"]);
   }
+  if (firstToMove !== FirstToMove.vertical && horizontal) {
+    firstKeyPadCode.push([...horizontalMoves, ...verticalMoves, "A"]);
+  }
+  if (!horizontal && !vertical) {
+    firstKeyPadCode.push(["A"]);
+  }
+
+  const keyPadCode: KeyPadButton[][] = [];
+  for (const first of firstKeyPadCode) {
+    for (const rest of restResult) {
+      keyPadCode.push([...first, ...rest]);
+    }
+  }
+
   return keyPadCode;
 };
 
@@ -171,13 +183,31 @@ const findShortestPathForCode = (code: Code): ShortestPath[] => {
   return shortestPath;
 };
 
-const findPresses = (code: Code): KeyPadButton[] => {
+const keepSmallestKeyPadCombinations = (
+  moves: KeyPadButton[][]
+): KeyPadButton[][] => {
+  const minPressCount = Math.min(
+    ...moves.map((combinations) => combinations.length)
+  );
+  return moves.filter((combinations) => combinations.length === minPressCount);
+};
+
+const findPresses = (code: Code): KeyPadButton[][] => {
   const numericPath = findShortestPathForCode(code);
-  const keyPadCode = transformShortestPathToKeyPadCode(numericPath);
-  const pathOnKeyPad = findShortestPathForKeyPad(keyPadCode);
-  const keyPadCode2 = transformShortestPathToKeyPadCode(pathOnKeyPad);
-  const pathOnKeyPad2 = findShortestPathForKeyPad(keyPadCode2);
-  return transformShortestPathToKeyPadCode(pathOnKeyPad2);
+  const keyPadCodes = keepSmallestKeyPadCombinations(
+    transformShortestPathToKeyPadCode(numericPath)
+  );
+  const pathOnKeyPad = keyPadCodes.map(findShortestPathForKeyPad);
+  const keyPadCodes2 = keepSmallestKeyPadCombinations(
+    pathOnKeyPad
+      .map(transformShortestPathToKeyPadCode)
+      .reduce((acc, val) => acc.concat(val), [])
+  );
+  const pathOnKeyPad2 = keyPadCodes2.map(findShortestPathForKeyPad);
+  const finalPresses = pathOnKeyPad2
+    .map(transformShortestPathToKeyPadCode)
+    .reduce((acc, val) => acc.concat(val), []);
+  return keepSmallestKeyPadCombinations(finalPresses);
 };
 
 const getNumeric = (code: Code): number => {
@@ -188,8 +218,11 @@ let result = 0;
 
 for (const code of codes) {
   const presses = findPresses(code);
-  console.log(presses.length, getNumeric(code));
-  result += presses.length * getNumeric(code);
+  const minPressCount = Math.min(
+    ...presses.map((combinations) => combinations.length)
+  );
+  console.log(minPressCount, getNumeric(code));
+  result += minPressCount * getNumeric(code);
 }
 
 // 204430 < x
