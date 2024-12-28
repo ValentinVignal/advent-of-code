@@ -12,15 +12,13 @@ type Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "A";
 
 type KeyPadButton = "^" | "v" | "<" | ">" | "A";
 
-type NumericCode = Digit[];
-
-type KeyPadCode = KeyPadButton[];
+type Code = Digit[];
 
 type Optional<T> = T | null;
 
-const numberOfDirectionalKeyPads = 25;
+const numberOfDirectionalKeyPads = 2;
 
-const codes: NumericCode[] = textInput
+const codes: Code[] = textInput
   .split("\n")
   .map((line) => line.split("").filter(Boolean) as Digit[]);
 
@@ -75,13 +73,22 @@ for (const [y, row] of directionalKeyPad.entries()) {
   }
 }
 
-type DirectionalKey = `${number}${KeyPadButton}${string}`;
+type NumericalKey = `${Digit}${Digit}`;
+type DirectionalKey = `${KeyPadButton}${KeyPadButton}${number}`;
 
+const fromToNumericKey = (from: Digit, to: Digit): NumericalKey =>
+  `${from}${to}`;
 const fromToDirectionalKey = (
   from: KeyPadButton,
-  code: KeyPadCode,
+  to: KeyPadButton,
   depth: number
-): DirectionalKey => `${depth}${from}${code.join("")}`;
+): DirectionalKey => `${from}${to}${depth}`;
+
+/**
+ * Gives the number of presses needed to click on a button starting from another
+ * button on the numeric key pad.
+ */
+const countNumericKeyPad = new Map<NumericalKey, number>();
 
 /**
  * Gives the number of presses needed to click on a button starting from another
@@ -134,13 +141,10 @@ const findMoveDirectional = (from: XY, to: XY): Move => {
 };
 
 /**
- * Gives the possible keypad button to press do a set of moves.
+ * Gives the possible keypad button to press do a move.
  */
-const movesToKeyPadCodes = (moves: Move[]): KeyPadButton[][] => {
-  if (!moves.length) return [[]];
-  const [{ horizontal, vertical, firstDirection }, ...rest] = moves;
-
-  const restResult = movesToKeyPadCodes(rest);
+const moveToKeyPadCode = (move: Move): KeyPadButton[][] => {
+  const { horizontal, vertical, firstDirection } = move;
 
   const verticalMoves = (vertical > 0 ? "v" : "^")
     .repeat(Math.abs(vertical))
@@ -151,48 +155,37 @@ const movesToKeyPadCodes = (moves: Move[]): KeyPadButton[][] => {
     .split("")
     .filter(Boolean) as KeyPadButton[];
 
-  const firstKeyPadCode: KeyPadButton[][] = [];
+  const code: KeyPadButton[][] = [];
   if (firstDirection !== FirstDirection.horizontal && vertical) {
-    firstKeyPadCode.push([...verticalMoves, ...horizontalMoves, "A"]);
+    code.push([...verticalMoves, ...horizontalMoves, "A"]);
   }
   if (firstDirection !== FirstDirection.vertical && horizontal) {
-    firstKeyPadCode.push([...horizontalMoves, ...verticalMoves, "A"]);
+    code.push([...horizontalMoves, ...verticalMoves, "A"]);
   }
   if (!horizontal && !vertical) {
-    firstKeyPadCode.push(["A"]);
+    code.push(["A"]);
   }
 
-  const keyPadCode: KeyPadButton[][] = [];
-  for (const first of firstKeyPadCode) {
-    for (const rest of restResult) {
-      keyPadCode.push([...first, ...rest]);
-    }
-  }
-
-  return keyPadCode;
+  return code;
 };
 
-const getCountDirectionalKeyPadCode = (
+const getCountDirectionalKeyPad = (
   from: KeyPadButton,
-  code: KeyPadCode,
+  to: KeyPadButton,
   depth: number
 ): number => {
-  const key = fromToDirectionalKey(from, code, depth);
+  const key = fromToDirectionalKey(from, to, depth);
+
   if (countDirectionKeyPads.has(key)) return countDirectionKeyPads.get(key)!;
 
-  const moves: Move[] = [];
-  for (const to of code) {
-    const fromXY = directionalKeyPadButtonPositionMap.get(from)!;
-    const toXY = directionalKeyPadButtonPositionMap.get(to)!;
-    const move = findMoveDirectional(fromXY, toXY);
-    moves.push(move);
-    from = to;
-  }
-
-  const possibleCodes = movesToKeyPadCodes(moves);
+  // We need to compute it.
+  const fromXY = directionalKeyPadButtonPositionMap.get(from)!;
+  const toXY = directionalKeyPadButtonPositionMap.get(to)!;
+  const move = findMoveDirectional(fromXY, toXY);
+  const possibleCodes = moveToKeyPadCode(move);
   const lengths = possibleCodes.map((code) => {
     if (!depth) return code.length;
-    return getCountDirectionalKeyPadCode(from, code, depth - 1);
+    return getCountDirectionalKeyPadCode(code, depth - 1);
   });
   const count = Math.min(...lengths);
 
@@ -200,31 +193,58 @@ const getCountDirectionalKeyPadCode = (
   return count;
 };
 
-/** Returns the count of presses needed to enter a code. */
-const getCountFromCode = (code: NumericCode): number => {
-  let from: Digit = "A";
-  const moves: Move[] = [];
+const getCountDirectionalKeyPadCode = (
+  code: KeyPadButton[],
+  depth: number
+): number => {
+  let count = 0;
+  let from: KeyPadButton = "A";
   for (const to of code) {
-    const fromXY = numericPadButtonPositionMap.get(from)!;
-    const toXY = numericPadButtonPositionMap.get(to)!;
-    const move = findMoveNumeric(fromXY, toXY);
-    moves.push(move);
+    count += getCountDirectionalKeyPad(from, to, depth);
     from = to;
   }
 
-  const possibleCodes = movesToKeyPadCodes(moves);
+  return count;
+};
 
+/**
+ * Gives the number of presses needed to click on a button starting from another
+ * one.
+ */
+const getCountNumericKeyPad = (from: Digit, to: Digit): number => {
+  const key = fromToNumericKey(from, to);
+
+  if (countNumericKeyPad.has(key)) return countNumericKeyPad.get(key)!;
+
+  // We need to compute it.
+  const fromXY = numericPadButtonPositionMap.get(from)!;
+  const toXY = numericPadButtonPositionMap.get(to)!;
+  const move = findMoveNumeric(fromXY, toXY);
+  const possibleCodes = moveToKeyPadCode(move);
   const count = Math.min(
     ...possibleCodes.map((code) =>
-      getCountDirectionalKeyPadCode("A", code, numberOfDirectionalKeyPads - 1)
+      getCountDirectionalKeyPadCode(code, numberOfDirectionalKeyPads - 1)
     )
   );
+
+  countNumericKeyPad.set(key, count);
+  return count;
+};
+
+/** Returns the count of presses needed to enter a code. */
+const getCountFromCode = (code: Code): number => {
+  let count = 0;
+  let from: Digit = "A";
+  for (const to of code) {
+    count += getCountNumericKeyPad(from, to);
+    from = to;
+  }
 
   return count;
 };
 
 /** Returns the numeric part of the code. */
-const getNumeric = (code: NumericCode): number => {
+const getNumeric = (code: Code): number => {
   return parseInt(code.slice(0, 3).join(""));
 };
 
