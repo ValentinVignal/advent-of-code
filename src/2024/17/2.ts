@@ -49,61 +49,13 @@ const instructions: Instruction[] = programText
     };
   });
 
-const stateToString = ({ a, b, c }: Registers, outputLength: number) => {
-  return `${a},${b},${c},${outputLength}`;
-};
+const program = programText.split(",").map(Number);
 
-// Looking at the outputs, it seems the input must start with by (base8):
-// - 5
-// - 53, 57
-// - 532, 572
-// - 5322, 5722, 5325
-// - 53223, 57223, 53257
-// - 532235, 572235, 532577 -> Dead end
-// - 53223, 57223, 53257
-// - 532235
-// - 5322350
-// - 53223501, 532235014
-// - 532235013, 532235016 -> Retry ?
-// - 5322350134, 5322350135, 5322350137
-// - 53223501340, 53223501342, 53223501352, 53223501372, 53223501345, 53223501355, 53223501375, 53223501346, 53223501356, 53223501347, 53223501357, 53223501377
-// - 532235013403, 532235013423, 532235013523, 532235013723, 532235013463, 532235013563, 532235013725, 532235013755, 532235013775
-// - 5322350134036, 5322350134236, 5322350135236, 5322350137236, 5322350134636, 5322350135636
-// - 53223501340360, 53223501342360, 53223501352360, 53223501372360, 53223501346360, 53223501356360, 53223501340361, 53223501340365, 53223501342365, 53223501352365, 53223501372365, 53223501346365, 53223501356365 -> Dead end
-//
-// - 5322350164, 5322350165
-// - 53223501640, 53223501642, 5322350165
-// - 532235016403, 532235016423, 532235016523
-// - 5322350164036, 5322350164236, 5322350165236
-// - 53223501640360, 53223501642360, 53223501652360
-
-const bases = [0o53223501, 0o53223501, 0o53223501];
-
-const startInc = -1;
-let inc = startInc;
-const getRegisterA = (): number => {
-  const base = bases[inc % bases.length];
-  const newInc = Math.floor(inc / bases.length);
-  if (base === 0) return newInc;
-  return (
-    base *
-      0o10 ** ((!newInc ? 0 : Math.floor(Math.log(newInc) / Math.log(8))) + 1) +
-    newInc
-  );
-};
-
-while (true) {
-  inc++;
-  const registerA = getRegisterA();
-  console.log("registerA", registerA.toString(8));
-  if (inc > startInc + 8 ** 6 * bases.length) break;
-
+const runProgram = (initialRegisterA: number): number[] => {
   const registers = {
     ...initialRegisters,
-    a: registerA,
+    a: initialRegisterA,
   };
-
-  const visitedStates = new Set<string>();
 
   const outputs: number[] = [];
 
@@ -129,11 +81,11 @@ while (true) {
     switch (operation) {
       case OperationCode.Adv: {
         const comboOperand = getComboOperand();
-        registers.a = Math.floor(registers.a / 2 ** comboOperand);
+        registers.a = Math.trunc(registers.a / 2 ** comboOperand);
         break;
       }
       case OperationCode.Bxl:
-        registers.b ^= operand;
+        registers.b = (registers.b ^ operand) >>> 0;
         break;
       case OperationCode.Bst: {
         const comboOperand = getComboOperand();
@@ -148,19 +100,19 @@ while (true) {
         break;
       }
       case OperationCode.Bxc:
-        registers.b ^= registers.c;
+        registers.b = (registers.b ^ registers.c) >>> 0;
         break;
       case OperationCode.Out:
         outputs.push(getComboOperand() % 8);
         break;
       case OperationCode.Bdv: {
         const comboOperand = getComboOperand();
-        registers.b = Math.floor(registers.a / 2 ** comboOperand);
+        registers.b = Math.trunc(registers.a / 2 ** comboOperand);
         break;
       }
       case OperationCode.cdv: {
         const comboOperand = getComboOperand();
-        registers.c = Math.floor(registers.a / 2 ** comboOperand);
+        registers.c = Math.trunc(registers.a / 2 ** comboOperand);
         break;
       }
     }
@@ -175,18 +127,51 @@ while (true) {
       (r) => r >= 0 && Number.isInteger(r)
     )
   ) {
-    if (!instructionIndex) {
-      visitedStates.add(stateToString(registers, outputs.length));
-    }
     runInstruction();
   }
 
-  if (getInstruction() || programText !== outputs.join(",")) {
-    console.log("out", outputs.join(","));
-    continue;
-  } else {
-    break;
-  }
-}
+  return outputs;
+};
 
-console.log(getRegisterA());
+const visitedLeadings: number[][] = [];
+
+const numberOfDigitsBase8 = (n: number): number =>
+  Math.floor(Math.log(n) / Math.log(8)) + 1;
+
+/**
+ *
+ * @param possibleLeading Different possibilities of the first n digit (base8)
+ * of register A that leads to output the n last digits of the program.
+ *
+ */
+const findRegisterA = (possibleLeading: number[]): number | null => {
+  if (!possibleLeading.length) {
+    const message = `No possible leading. \n\n${visitedLeadings
+      .map((l) => l.map((n) => n.toString(8)).join(", "))
+      .join("\n")}`;
+    throw new Error(message);
+  }
+
+  visitedLeadings.push(possibleLeading);
+  const possibleNewLeadings: number[] = [];
+  for (const leading of possibleLeading) {
+    const newLeadings = Array.from({ length: 8 }, (_, i) => 0o10 * leading + i);
+    for (const newLeading of newLeadings) {
+      const outputs = runProgram(newLeading);
+      if (
+        program.join("").endsWith(outputs.join("")) &&
+        outputs.length === numberOfDigitsBase8(newLeading)
+      ) {
+        if (program.join("") === outputs.join("")) {
+          return newLeading;
+        }
+        possibleNewLeadings.push(newLeading);
+      }
+    }
+  }
+  return findRegisterA(possibleNewLeadings);
+};
+
+const result = findRegisterA(Array.from({ length: 7 }, (_, i) => i + 1))!;
+
+console.log("result", result); // 190384113204239
