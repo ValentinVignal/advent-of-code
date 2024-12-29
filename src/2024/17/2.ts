@@ -1,10 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const textInput = readFileSync(
-  path.join(__dirname, `input-example.txt`),
-  "utf-8"
-);
+const textInput = readFileSync(path.join(__dirname, `input.txt`), "utf-8");
 
 type Registers = {
   a: number;
@@ -58,12 +55,45 @@ const stateToString = ({ a, b, c }: Registers, outputLength: number) => {
   return `${a},${b},${c},${outputLength}`;
 };
 
-let registerA = -1;
+// Looking at the outputs, it seems the input must finish by (base8):
+// - 17
+// - 36017
+// - 0134036017, 0476236017, 537236017
+// - 537236017
+// - 510537236017 -> Dead end
+// - 10537236017
+// - 60510537236017, 64510537236017 -> Dead end
+// - 0134036017, 0476236017, 537236017 -> Dead end
+// - 36017
+// - 1236017 -> Dead end
+// - 36017
+// - 4036017, 6236017, 7236017 -> Dead end
+// - 0
+// - 17, 61
+// - 6017, 5661, 5761, 7761
+// - 05661
+// - 036017, 05661
+// - 505661, 4036017
+// - 4505661, 4036017
+// - 34505661, 34036017
+// - 134505661, 134036017
+
+const bases = [0o0];
+
+const startInc = 0;
+let inc = startInc;
+const getRegisterA = (): number => {
+  const base = bases[inc % bases.length];
+  const newInc = Math.floor(inc / bases.length);
+  if (base === 0) return newInc;
+  return base + newInc * 0o10 ** (Math.floor(Math.log(base) / Math.log(8)) + 1);
+};
+
 while (true) {
-  registerA++;
-  if (registerA % 10000000 === 0) {
-    console.log("registerA", registerA);
-  }
+  inc++;
+  const registerA = getRegisterA();
+  console.log("registerA", registerA.toString(8));
+  if (inc > startInc + 8 ** 6) break;
 
   const registers = {
     ...initialRegisters,
@@ -156,10 +186,11 @@ while (true) {
     for (const visitedState of visitedStates) {
       unsuccessfulStates.add(visitedState);
     }
+    console.log("out", outputs.join(","));
     continue;
   } else {
     break;
   }
 }
 
-console.log(registerA);
+console.log(getRegisterA());
