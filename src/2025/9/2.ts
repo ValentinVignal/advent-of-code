@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = 2;
+const example = 3;
 const log = example > 0;
 const textInput = readFileSync(
   path.join(
