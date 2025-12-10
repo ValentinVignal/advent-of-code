@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = true;
+const example = false;
 const textInput = readFileSync(
   path.join(__dirname, `input${example ? "-example" : ""}.txt`),
   "utf-8"
@@ -37,52 +37,60 @@ const input: Machine[] = textInput
     return { lights, buttons };
   });
 
-type MachineState = Machine & {
+type MachineState = {
   state: boolean[];
+  presses: number;
+  tapped: number[];
 };
 
-const states: MachineState[] = input.map((machine) => ({
-  ...machine,
-  state: Array(machine.lights.length).fill(false),
-}));
+const findFewestPresses = (machine: Machine): number => {
+  let min = Infinity;
+  const queue: MachineState[] = [
+    { state: machine.lights.map(() => false), presses: 0, tapped: [] },
+  ];
 
-const stateToString = (state: MachineState): string => {
-  return `${state.lights
-    .map((light) => (light ? "#" : "."))
-    .join("")}@${state.state
-    .map((s) => (s ? "#" : "."))
-    .join("")}@${state.buttons.map((buttons) => buttons.join(",")).join("-")}`;
-};
+  const seen = new Set<string>();
 
-const cache = new Map<string, number>();
+  while (queue.length) {
+    const current = queue.shift()!;
 
-const findFewestPresses = (machineState: MachineState): number => {
-  const stateKey = stateToString(machineState);
-  if (cache.has(stateKey)) {
-    return cache.get(stateKey)!;
-  }
-
-  if (machineState.state.every((s, i) => s === machineState.lights[i])) {
-    cache.set(stateKey, 0);
-    return 0;
-  }
-
-  const newStates: MachineState[] = machineState.buttons.map((button) => {
-    const newState = structuredClone(machineState);
-    for (const lightIndex of button) {
-      newState.state[lightIndex] = !newState.state[lightIndex];
+    if (seen.has(current.tapped.join(","))) {
+      continue;
     }
-    return newState;
-  });
 
-  const pressesCounts = 1 + Math.min(...newStates.map(findFewestPresses));
+    if (current.presses >= min) {
+      continue;
+    }
 
-  cache.set(stateKey, pressesCounts);
-  return pressesCounts;
+    if (
+      current.state.every((light, index) => light === machine.lights[index])
+    ) {
+      min = Math.min(min, current.presses);
+      continue;
+    }
+
+    for (const [buttonIndex, button] of machine.buttons.entries()) {
+      if (current.tapped.includes(buttonIndex)) {
+        continue;
+      }
+      const newState = {
+        presses: current.presses + 1,
+        state: current.state.map((light, i) =>
+          button.includes(i) ? !light : light
+        ),
+        tapped: [...current.tapped, buttonIndex].sort((a, b) => a - b),
+      };
+      queue.push(newState);
+    }
+    seen.add(current.tapped.join(","));
+  }
+  return min;
 };
 
-const results = states.map(findFewestPresses);
+const results = input.map((machine) => {
+  return findFewestPresses(machine);
+});
 
 const result = results.reduce((a, b) => a + b, 0);
 
-console.log("Result:", result);
+console.log("Result:", result); // 415
