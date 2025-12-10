@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = 1;
+const example = 2;
 const log = example > 0;
 const textInput = readFileSync(
   path.join(
@@ -211,7 +211,7 @@ const isAllGreen = (a: Position, b: Position): boolean => {
           getCrossAxis(edge.from),
           getCrossAxis(edge.to)
         );
-        return minYEdge <= from.y && maxYEdge >= from.y;
+        return minYEdge <= getCrossAxis(from) && maxYEdge >= getCrossAxis(from);
       });
       const isOnCrossEdge = !!crossEdge;
 
@@ -228,7 +228,8 @@ const isAllGreen = (a: Position, b: Position): boolean => {
       });
       const isOnParallelEdge = !!parallelEdge;
 
-      const isInsideCheckRectangleEdge = from.x <= x && x <= to.x;
+      const isInsideCheckRectangleEdge =
+        getMainAxis(from) <= x && x <= getMainAxis(to);
 
       if (
         !isInside &&
@@ -297,7 +298,8 @@ for (let i = 0; i < input.length; i++) {
     const posA = input[i];
     const posB = input[j];
 
-    if (posA.x === 4 && posA.y === 16 && posB.x === 20 && posB.y === 2) {
+    // if (posA.x === 4 && posA.y === 16 && posB.x === 20 && posB.y === 2) {
+    if (posA.x === 9 && posA.y === 5 && posB.x === 2 && posB.y === 3) {
       console.log("debug");
     }
 
@@ -317,4 +319,5 @@ logGridInFile([positions!.a, positions!.b]);
 
 console.log(positions!);
 // x < 2791469338 < 2916646439 < 2945126325
+// x != 1529641011
 console.log("result:", maxArea); //
