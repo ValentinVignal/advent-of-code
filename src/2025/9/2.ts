@@ -139,165 +139,120 @@ const logGridInFile = (foundPositions?: [Position, Position]): void => {
 logGridInFile();
 
 const isAllGreen = (a: Position, b: Position): boolean => {
-  const checkHorizontalEdge = (from: Position, to: Position): boolean => {
+  /** Checks whether the horizontal edge between two positions is fully inside the shape */
+  const checkRectangleEdge = (from: Position, to: Position): boolean => {
+    const direction =
+      from.x === to.x ? Alignment.Vertical : Alignment.Horizontal;
+
+    /** Returns the main axis value of a position based on the direction */
+    const getMainAxis = (pos: Position): number =>
+      direction === Alignment.Horizontal ? pos.x : pos.y;
+
+    /** Returns the cross axis value of a position based on the direction */
+    const getCrossAxis = (pos: Position): number =>
+      direction === Alignment.Horizontal ? pos.y : pos.x;
     let previousSign: Sign | null = null;
     let isInside = false;
-    const intersectingVerticalEdges = verticalEdges
+    const intersectingCrossEdges = (
+      direction === Alignment.Horizontal ? verticalEdges : horizontalEdges
+    )
       .filter((edge) => {
-        const minYEdge = Math.min(edge.from.y, edge.to.y);
-        const maxYEdge = Math.max(edge.from.y, edge.to.y);
+        const minCross = Math.min(
+          getCrossAxis(edge.from),
+          getCrossAxis(edge.to)
+        );
+        const maxCross = Math.max(
+          getCrossAxis(edge.from),
+          getCrossAxis(edge.to)
+        );
         return (
-          edge.from.x >= from.x &&
-          edge.from.x <= to.x &&
-          minYEdge <= from.y &&
-          maxYEdge >= from.y
+          getMainAxis(edge.from) >= getMainAxis(from) &&
+          getMainAxis(edge.from) <= getMainAxis(to) &&
+          minCross <= getCrossAxis(from) &&
+          maxCross >= getCrossAxis(from)
         );
       })
-      .sort((a, b) => a.from.x - b.from.x);
+      .sort((a, b) => getMainAxis(a.from) - getMainAxis(b.from));
     const indexes = [
-      ...intersectingVerticalEdges.map((edge) => edge.from.x),
-      from.x,
-      from.x + 1,
-      to.x - 1,
-      to.x,
+      ...intersectingCrossEdges.map((edge) => getMainAxis(edge.from)),
+      getMainAxis(from),
+      getMainAxis(from) + 1,
+      getMainAxis(to) - 1,
+      getMainAxis(to),
     ]
       .filter((v, i, s) => s.indexOf(v) === i)
       .sort((a, b) => a - b);
     let currentIndex = -1;
     while (
-      indexes[currentIndex + 1] <= to.x &&
+      indexes[currentIndex + 1] <= getMainAxis(to) &&
       currentIndex + 1 < indexes.length
     ) {
       currentIndex++;
       const x = indexes[currentIndex];
-      const verticalEdge = intersectingVerticalEdges.find((edge) => {
-        if (edge.from.x !== x) return false;
+      const crossEdge = intersectingCrossEdges.find((edge) => {
+        if (getMainAxis(edge.from) !== x) return false;
 
-        const minYEdge = Math.min(edge.from.y, edge.to.y);
-        const maxYEdge = Math.max(edge.from.y, edge.to.y);
+        const minYEdge = Math.min(
+          getCrossAxis(edge.from),
+          getCrossAxis(edge.to)
+        );
+        const maxYEdge = Math.max(
+          getCrossAxis(edge.from),
+          getCrossAxis(edge.to)
+        );
         return minYEdge <= from.y && maxYEdge >= from.y;
       });
-      const isOnVerticalEdge = !!verticalEdge;
+      const isOnCrossEdge = !!crossEdge;
 
-      const horizontalEdge = horizontalEdges.find((edge) => {
-        const minXEdge = Math.min(edge.from.x, edge.to.x);
-        const maxXEdge = Math.max(edge.from.x, edge.to.x);
-        return edge.from.y === from.y && minXEdge <= x && maxXEdge >= x;
+      const parallelEdge = (
+        direction === Alignment.Horizontal ? horizontalEdges : verticalEdges
+      ).find((edge) => {
+        const minXEdge = Math.min(getMainAxis(edge.from), getMainAxis(edge.to));
+        const maxXEdge = Math.max(getMainAxis(edge.from), getMainAxis(edge.to));
+        return (
+          getCrossAxis(edge.from) === getCrossAxis(from) &&
+          minXEdge <= x &&
+          maxXEdge >= x
+        );
       });
-      const isOnHorizontalEdge = !!horizontalEdge;
+      const isOnParallelEdge = !!parallelEdge;
 
-      const isInsideVerifiedEdge = from.x <= x && x <= to.x;
+      const isInsideCheckRectangleEdge = from.x <= x && x <= to.x;
 
       if (
         !isInside &&
-        !isOnVerticalEdge &&
-        !isOnHorizontalEdge &&
-        isInsideVerifiedEdge
+        !isOnCrossEdge &&
+        !isOnParallelEdge &&
+        isInsideCheckRectangleEdge
       ) {
         return false;
       }
-      if (!isOnVerticalEdge) {
+      if (!isOnCrossEdge) {
         continue;
       }
 
       const isOnCorner =
-        x === verticalEdge.from.x &&
-        (verticalEdge.from.y === from.y || verticalEdge.to.y === from.y);
+        x === getMainAxis(crossEdge.from) &&
+        (getCrossAxis(crossEdge.from) === getCrossAxis(from) ||
+          getCrossAxis(crossEdge.to) === getCrossAxis(from));
 
       if (!isOnCorner) {
         isInside = !isInside;
         continue;
       }
 
-      if (Math.min(horizontalEdge!.from.x, horizontalEdge!.to.x) === x) {
+      if (
+        Math.min(
+          getMainAxis(parallelEdge!.from),
+          getMainAxis(parallelEdge!.to)
+        ) === x
+      ) {
         // We are entering the horizontal edge.
-        previousSign = horizontalEdge!.sign;
+        previousSign = parallelEdge!.sign;
       } else {
         // We are exiting the horizontal edge.
 
-        if (previousSign === horizontalEdge!.sign) {
-          isInside = !isInside;
-        } else {
-          // Do nothing.
-        }
-        previousSign = null;
-      }
-    }
-    return true;
-  };
-
-  const checkVerticalEdge = (from: Position, to: Position): boolean => {
-    let previousSign: Sign | null = null;
-    let isInside = false;
-    const intersectingHorizontalEdges = horizontalEdges
-      .filter((edge) => {
-        const minXEdge = Math.min(edge.from.x, edge.to.x);
-        const maxXEdge = Math.max(edge.from.x, edge.to.x);
-        return (
-          edge.from.y >= from.y &&
-          edge.from.y <= to.y &&
-          minXEdge <= from.x &&
-          maxXEdge >= from.x
-        );
-      })
-      .sort((a, b) => a.from.y - b.from.y);
-    const indexes = [
-      ...intersectingHorizontalEdges.map((edge) => edge.from.y),
-      from.y,
-      from.y + 1,
-      to.y - 1,
-      to.y,
-    ].sort((a, b) => a - b);
-    let currentIndex = -1;
-    while (
-      currentIndex < indexes.length - 1 &&
-      indexes[currentIndex + 1] <= to.y
-    ) {
-      currentIndex++;
-      const y = indexes[currentIndex];
-      const horizontalEdge = intersectingHorizontalEdges.find((edge) => {
-        const minXEdge = Math.min(edge.from.x, edge.to.x);
-        const maxXEdge = Math.max(edge.from.x, edge.to.x);
-        return minXEdge <= from.x && maxXEdge >= from.x;
-      });
-      const isOnHorizontalEdge = !!horizontalEdge;
-
-      const verticalEdge = verticalEdges.find((edge) => {
-        const minYEdge = Math.min(edge.from.y, edge.to.y);
-        const maxYEdge = Math.max(edge.from.y, edge.to.y);
-        return edge.from.x === from.x && minYEdge <= y && maxYEdge >= y;
-      });
-      const isOnVerticalEdge = !!verticalEdge;
-
-      const isInsideVerifiedEdge = from.y <= y && y <= to.y;
-
-      if (
-        !isInside &&
-        !isOnHorizontalEdge &&
-        !isOnVerticalEdge &&
-        isInsideVerifiedEdge
-      ) {
-        return false;
-      }
-      if (!isOnHorizontalEdge) {
-        continue;
-      }
-
-      const isOnCorner =
-        y === horizontalEdge.from.y &&
-        (horizontalEdge?.from.x === from.x || horizontalEdge?.to.x === from.x);
-
-      if (!isOnCorner) {
-        isInside = !isInside;
-        continue;
-      }
-
-      if (Math.min(verticalEdge!.from.y, verticalEdge!.to.y) === y) {
-        // We are entering the vertical edge.
-        previousSign = verticalEdge!.sign;
-      } else {
-        // We are exiting the vertical edge.
-        if (previousSign === horizontalEdge!.sign) {
+        if (previousSign === parallelEdge!.sign) {
           isInside = !isInside;
         } else {
           // Do nothing.
@@ -316,10 +271,10 @@ const isAllGreen = (a: Position, b: Position): boolean => {
   };
 
   return (
-    checkHorizontalEdge(corners.topLeft, corners.topRight) &&
-    checkHorizontalEdge(corners.bottomLeft, corners.bottomRight) &&
-    checkVerticalEdge(corners.topLeft, corners.bottomLeft) &&
-    checkVerticalEdge(corners.topRight, corners.bottomRight)
+    checkRectangleEdge(corners.topLeft, corners.topRight) &&
+    checkRectangleEdge(corners.bottomLeft, corners.bottomRight) &&
+    checkRectangleEdge(corners.topLeft, corners.bottomLeft) &&
+    checkRectangleEdge(corners.topRight, corners.bottomRight)
   );
 };
 
@@ -331,7 +286,7 @@ for (let i = 0; i < input.length; i++) {
     const posA = input[i];
     const posB = input[j];
 
-    if (posA.x === 9 && posA.y === 5 && posB.x === 2 && posB.y === 3) {
+    if (posA.x === 4 && posA.y === 16 && posB.x === 20 && posB.y === 2) {
       console.log("debug");
     }
 
