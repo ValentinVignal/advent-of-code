@@ -27,7 +27,6 @@ const input: Machine[] = textInput
       .substring(0, b.length - 1)
       .split(",")
       .map(Number);
-
     const buttons = a
       .split("] ")[1]
       .split(" ")
@@ -38,68 +37,66 @@ const input: Machine[] = textInput
           .map(Number);
       })
       .sort((a, b) => scalarProduct(b, joltage) - scalarProduct(a, joltage));
-    return { joltage, buttons };
-  })
-  .slice(12, 13);
 
-type MachineState = {
+    return { joltage, buttons };
+  });
+
+type MachineState = Machine & {
   state: number[];
-  presses: number;
 };
 
-const isStateValid = (machine: Machine, state: MachineState): boolean =>
-  state.state.every((joltage, index) => joltage <= machine.joltage[index]);
+const isStateValid = (state: MachineState): boolean =>
+  state.state.every((joltage, index) => joltage <= state.joltage[index]);
 
-const isStateFinal = (machine: Machine, state: MachineState): boolean =>
-  state.state.every((joltage, index) => joltage === machine.joltage[index]);
+const isStateFinal = (state: MachineState): boolean =>
+  state.state.every((joltage, index) => joltage === state.joltage[index]);
+
+const states: MachineState[] = input.map((machine) => ({
+  ...machine,
+  state: Array(machine.joltage.length).fill(0),
+}));
 
 const stateToString = (state: MachineState): string => {
   return `${state.state.join(",")}`;
 };
 
-const findFewestPresses = (machine: Machine): number => {
-  const queue = [
-    {
-      state: machine.joltage.map(() => 0),
-      presses: 0,
-    },
-  ];
-  const visited = new Set<string>();
-
-  while (queue.length) {
-    const current = queue.shift()!;
-
-    const stateKey = stateToString(current);
-    if (visited.has(stateKey)) {
-      continue;
+const findFewestPresses = (machine: MachineState): number => {
+  const cache = new Map<string, number>();
+  const findFewestPressesRecursive = (machineState: MachineState): number => {
+    const stateKey = stateToString(machineState);
+    if (cache.has(stateKey)) {
+      return cache.get(stateKey)!;
     }
 
-    visited.add(stateKey);
-
-    if (isStateFinal(machine, current)) {
-      return current.presses;
+    if (isStateFinal(machineState)) {
+      console.log("Final state reached:", stateKey);
+      cache.set(stateKey, 0);
+      return 0;
+    }
+    if (!isStateValid(machineState)) {
+      return Infinity;
     }
 
-    const newStates: MachineState[] = machine.buttons.map((button) => {
-      const newState = structuredClone(current);
+    const newStates: MachineState[] = machineState.buttons.map((button) => {
+      const newState = structuredClone(machineState);
       for (const lightIndex of button) {
         newState.state[lightIndex]++;
       }
-      newState.presses++;
       return newState;
     });
 
-    for (const newState of newStates) {
-      if (isStateValid(machine, newState)) {
-        queue.push(newState);
-      }
-    }
-  }
-  throw new Error("No solution found");
+    const pressesCounts =
+      1 + Math.min(...newStates.map(findFewestPressesRecursive));
+
+    cache.set(stateKey, pressesCounts);
+    return pressesCounts;
+  };
+
+  return findFewestPressesRecursive(machine);
 };
 
-const results = input.map((machine, index) => {
-  console.log(`Processing machine ${index + 1}/${input.length}`);
+const results = states.map((machine, index) => {
+  console.log(`Processing machine ${index + 1}/${states.length}`);
   return findFewestPresses(machine);
 });
 
