@@ -166,7 +166,8 @@ const isAllGreen = (a: Position, b: Position): boolean => {
           getCrossAxis(edge.to)
         );
         return (
-          getMainAxis(edge.from) >= getMainAxis(from) &&
+          // We don't want to test `getMainAxis(edge.from) >= getMainAxis(from)`
+          // because we need to consider all the edges from the index 0.
           getMainAxis(edge.from) <= getMainAxis(to) &&
           minCross <= getCrossAxis(from) &&
           maxCross >= getCrossAxis(from)
