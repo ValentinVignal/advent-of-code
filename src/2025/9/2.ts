@@ -1,7 +1,8 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = 2;
+const example = 1;
+const log = example > 0;
 const textInput = readFileSync(
   path.join(
     __dirname,
@@ -100,6 +101,7 @@ const isInsideEdge = (position: Position): PositionLocation => {
 
 /** Log the grid into a text file */
 const logGridInFile = (foundPositions?: [Position, Position]): void => {
+  if (!log) return;
   const minX = Math.min(...input.map((pos) => pos.x));
   const maxX = Math.max(...input.map((pos) => pos.x));
   const minY = Math.min(...input.map((pos) => pos.y));
@@ -186,10 +188,9 @@ const isAllGreen = (a: Position, b: Position): boolean => {
     const indexes = [
       ...intersectingCrossEdges.map((edge) => getMainAxis(edge.from)),
       getMainAxis(from),
-      getMainAxis(from) + 1,
-      getMainAxis(to) - 1,
       getMainAxis(to),
     ]
+      .flatMap((value) => [value - 1, value, value + 1])
       .filter((v, i, s) => s.indexOf(v) === i)
       .sort((a, b) => a - b);
     let currentIndex = -1;
@@ -258,11 +259,11 @@ const isAllGreen = (a: Position, b: Position): boolean => {
         ) === x
       ) {
         // We are entering the horizontal edge.
-        previousSign = parallelEdge!.sign;
+        previousSign = crossEdge!.sign;
       } else {
         // We are exiting the horizontal edge.
 
-        if (previousSign === parallelEdge!.sign) {
+        if (previousSign === crossEdge!.sign) {
           isInside = !isInside;
         } else {
           // Do nothing.
