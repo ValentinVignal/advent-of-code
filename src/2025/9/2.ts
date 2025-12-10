@@ -1,9 +1,14 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = false;
+const example = 2;
 const textInput = readFileSync(
-  path.join(__dirname, `input${example ? "-example" : ""}.txt`),
+  path.join(
+    __dirname,
+    `input${
+      example ? (example > 1 ? `-example-${example}` : "-example") : ""
+    }.txt`
+  ),
   "utf-8"
 );
 
@@ -12,10 +17,15 @@ type Position = {
   y: number;
 };
 
-const input = textInput.split("\n").map((line) => {
-  const [x, y] = line.split(",").map(Number);
-  return { x, y } as Position;
-});
+const input = textInput
+  .split("\n")
+  .filter(Boolean)
+  .map((line) => {
+    const [x, y] = line.split(",").map(Number);
+    return { x, y } as Position;
+  });
+
+console.log(input);
 
 enum Alignment {
   Horizontal,
@@ -52,6 +62,81 @@ const verticalEdges = edges.filter(
 const horizontalEdges = edges.filter(
   (edge) => edge.alignment === Alignment.Horizontal
 );
+
+enum PositionLocation {
+  Corner,
+  Inside,
+  Outside,
+}
+
+const isInsideEdge = (position: Position): PositionLocation => {
+  let result = PositionLocation.Outside;
+  for (const edge of edges) {
+    if (
+      (edge.to.x === position.x && edge.to.y === position.y) ||
+      (edge.from.x === position.x && edge.from.y === position.y)
+    ) {
+      return PositionLocation.Corner;
+    } else if (edge.alignment === Alignment.Horizontal) {
+      if (
+        position.y === edge.from.y &&
+        position.x >= Math.min(edge.from.x, edge.to.x) &&
+        position.x <= Math.max(edge.from.x, edge.to.x)
+      ) {
+        result = PositionLocation.Inside;
+      }
+    } else if (edge.alignment === Alignment.Vertical) {
+      if (
+        position.x === edge.from.x &&
+        position.y >= Math.min(edge.from.y, edge.to.y) &&
+        position.y <= Math.max(edge.from.y, edge.to.y)
+      ) {
+        result = PositionLocation.Inside;
+      }
+    }
+  }
+  return result;
+};
+
+/** Log the grid into a text file */
+const logGridInFile = (foundPositions?: [Position, Position]): void => {
+  const minX = Math.min(...input.map((pos) => pos.x));
+  const maxX = Math.max(...input.map((pos) => pos.x));
+  const minY = Math.min(...input.map((pos) => pos.y));
+  const maxY = Math.max(...input.map((pos) => pos.y));
+
+  console.log({ minX, maxX, minY, maxY });
+
+  let output = "";
+  for (let line = minY; line <= maxY; line++) {
+    for (let column = minX; column <= maxX; column++) {
+      const position = { x: column, y: line };
+      if (
+        foundPositions &&
+        ((position.x === foundPositions[0].x &&
+          position.y === foundPositions[0].y) ||
+          (position.x === foundPositions[1].x &&
+            position.y === foundPositions[1].y))
+      ) {
+        output += "\x1b[1m\x1b[33mO\x1b[0m";
+        continue;
+      }
+      const location = isInsideEdge(position);
+      if (location === PositionLocation.Corner) {
+        output += "\x1b[1m\x1b[35m#\x1b[0m";
+      } else if (location === PositionLocation.Inside) {
+        output += "X";
+      } else {
+        output += ".";
+      }
+    }
+    output += "\n";
+  }
+
+  console.log(output);
+};
+
+logGridInFile();
 
 const isAllGreen = (a: Position, b: Position): boolean => {
   const checkHorizontalEdge = (from: Position, to: Position): boolean => {
@@ -261,6 +346,8 @@ for (let i = 0; i < input.length; i++) {
     }
   }
 }
+
+logGridInFile([positions!.a, positions!.b]);
 
 console.log(positions!);
 // x < 2791469338 < 2916646439 < 2945126325
