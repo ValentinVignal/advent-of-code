@@ -107,8 +107,17 @@ const logGridInFile = (foundPositions?: [Position, Position]): void => {
 
   console.log({ minX, maxX, minY, maxY });
 
-  let output = "";
+  let output = " ";
+  for (let column = minX; column <= maxX; column++) {
+    output += `\x1b[1m\x1b[3${column % 10 ? "4" : "0"}m${(
+      column % 10
+    ).toString()}\x1b[0m`;
+  }
+  output += "\n";
   for (let line = minY; line <= maxY; line++) {
+    output += `\x1b[1m\x1b[3${line % 10 ? "4" : "0"}m${(
+      line % 10
+    ).toString()}\x1b[0m`;
     for (let column = minX; column <= maxX; column++) {
       const position = { x: column, y: line };
       if (
