@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = false;
+const example = true;
 const textInput = readFileSync(
   path.join(__dirname, `input${example ? "-example" : ""}.txt`),
   "utf-8"
@@ -41,65 +41,111 @@ const input: Machine[] = textInput
     return { joltage, buttons };
   });
 
-type MachineState = Machine & {
-  state: number[];
+type Vector = number[];
+type Matrix = number[][];
+
+const addVectors = (a: Vector, b: Vector): Vector => {
+  return a.map((val, index) => val + b[index]);
 };
 
-const isStateValid = (state: MachineState): boolean =>
-  state.state.every((joltage, index) => joltage <= state.joltage[index]);
-
-const isStateFinal = (state: MachineState): boolean =>
-  state.state.every((joltage, index) => joltage === state.joltage[index]);
-
-const states: MachineState[] = input.map((machine) => ({
-  ...machine,
-  state: Array(machine.joltage.length).fill(0),
-}));
-
-const stateToString = (state: MachineState): string => {
-  return `${state.state.join(",")}`;
+const multiplyMatrixVector = (matrix: Matrix, vector: Vector): Vector => {
+  return matrix.map((row) => scalarProduct(row, vector));
 };
 
-const findFewestPresses = (machine: MachineState): number => {
-  const cache = new Map<string, number>();
-  const findFewestPressesRecursive = (machineState: MachineState): number => {
-    const stateKey = stateToString(machineState);
-    if (cache.has(stateKey)) {
-      return cache.get(stateKey)!;
-    }
+const multiplyVectorScalar = (matrix: Vector, scalar: number): Vector => {
+  return matrix.map((val) => val * scalar);
+};
 
-    if (isStateFinal(machineState)) {
-      console.log("Final state reached:", stateKey);
-      cache.set(stateKey, 0);
-      return 0;
-    }
-    if (!isStateValid(machineState)) {
-      return Infinity;
-    }
+const getButtonsMatrix = (machine: Machine): Matrix => {
+  const matrix = Array.from({ length: machine.joltage.length }, () =>
+    Array(machine.buttons.length).fill(0)
+  );
 
-    const newStates: MachineState[] = machineState.buttons.map((button) => {
-      const newState = structuredClone(machineState);
-      for (const lightIndex of button) {
-        newState.state[lightIndex]++;
+  for (const [buttonIndex, button] of machine.buttons.entries()) {
+    for (const joltageIndex of button) {
+      matrix[joltageIndex][buttonIndex] = 1;
+    }
+  }
+  return matrix;
+};
+
+const norm1Matrix = (matrix: Matrix): number => {
+  return matrix.reduce((max, row) => {
+    const rowSum = row.reduce((sum, val) => sum + Math.abs(val), 0);
+    return Math.max(max, rowSum);
+  }, 0);
+};
+
+const getDelta = (a: Matrix, r: Vector): Vector => {
+  const m = a[0].length;
+  const n = a.length;
+
+  const getL1 = (): Vector => {
+    const delta: Vector = Array(m).fill(0);
+
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < m; j++) {
+        delta[j] += a[i][j] * Math.sign(r[i]);
       }
-      return newState;
-    });
+    }
 
-    const pressesCounts =
-      1 + Math.min(...newStates.map(findFewestPressesRecursive));
-
-    cache.set(stateKey, pressesCounts);
-    return pressesCounts;
+    return delta;
   };
 
-  return findFewestPressesRecursive(machine);
+  const getL2 = (): Vector => {
+    return Array(m).fill(1);
+  };
+
+  const l1 = getL1();
+  const l2 = getL2();
+
+  const delta = addVectors(l1, l2);
+  return delta;
 };
 
-const results = states.map((machine, index) => {
-  console.log(`Processing machine ${index + 1}/${states.length}`);
-  return findFewestPresses(machine);
-});
+const forcePositiveNumberVector = (vector: Vector): Vector => {
+  return vector.map((val) => Math.max(0, val));
+};
 
-const result = results.reduce((a, b) => a + b, 0);
+// const forceIntegerVector = (vector: Vector): Vector => {
+//   return vector.map((val) => Math.round(val));
+// };
 
-console.log("Result:", result);
+const findButtonCombination = (
+  machine: Machine
+): { joltage: Vector; presses: Vector } => {
+  /** Number of buttons */
+  const m = machine.buttons.length;
+  /** Number of lights */
+  // const n = machine.joltage.length;
+
+  const a = getButtonsMatrix(machine);
+
+  const y = multiplyVectorScalar(machine.joltage, -1);
+
+  let x = Array(m).fill(10);
+  let r = addVectors(multiplyMatrixVector(a, x), y);
+
+  let iteration = 0;
+  while (norm1Matrix([r]) > 0.0001) {
+    iteration++;
+    const learningRate = 10 / iteration;
+    const delta = getDelta(a, r);
+
+    x = addVectors(x, multiplyVectorScalar(delta, -learningRate));
+    r = addVectors(multiplyMatrixVector(a, x), y);
+    x = forcePositiveNumberVector(x);
+  }
+  return { joltage: multiplyMatrixVector(a, x), presses: x };
+};
+
+const combinations = input.map(findButtonCombination);
+console.log(combinations);
+
+const presses = combinations.map((combination) =>
+  combination.presses.reduce((sum, val) => sum + Math.round(val), 0)
+);
+
+const result = presses.reduce((sum, val) => sum + Math.round(val), 0);
+
+console.log(result);
