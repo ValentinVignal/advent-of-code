@@ -35,8 +35,7 @@ const input: Machine[] = textInput
           .substring(1, block.length - 1)
           .split(",")
           .map(Number);
-      })
-      .sort((a, b) => scalarProduct(b, joltage) - scalarProduct(a, joltage));
+      });
 
     return { joltage, buttons };
   });
@@ -44,17 +43,17 @@ const input: Machine[] = textInput
 type Vector = number[];
 type Matrix = number[][];
 
-const addVectors = (a: Vector, b: Vector): Vector => {
-  return a.map((val, index) => val + b[index]);
-};
+// const addVectors = (a: Vector, b: Vector): Vector => {
+//   return a.map((val, index) => val + b[index]);
+// };
 
 const multiplyMatrixVector = (matrix: Matrix, vector: Vector): Vector => {
   return matrix.map((row) => scalarProduct(row, vector));
 };
 
-const multiplyVectorScalar = (matrix: Vector, scalar: number): Vector => {
-  return matrix.map((val) => val * scalar);
-};
+// const multiplyVectorScalar = (matrix: Vector, scalar: number): Vector => {
+//   return matrix.map((val) => val * scalar);
+// };
 
 const getButtonsMatrix = (machine: Machine): Matrix => {
   const matrix = Array.from({ length: machine.joltage.length }, () =>
@@ -69,81 +68,129 @@ const getButtonsMatrix = (machine: Machine): Matrix => {
   return matrix;
 };
 
-const norm1Matrix = (matrix: Matrix): number => {
-  return matrix.reduce((max, row) => {
-    const rowSum = row.reduce((sum, val) => sum + Math.abs(val), 0);
-    return Math.max(max, rowSum);
-  }, 0);
-};
-
-const getDelta = (a: Matrix, r: Vector): Vector => {
-  const m = a[0].length;
-  const n = a.length;
-
-  const getL1 = (): Vector => {
-    const delta: Vector = Array(m).fill(0);
-
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < m; j++) {
-        delta[j] += a[i][j] * Math.sign(r[i]);
-      }
-    }
-
-    return delta;
-  };
-
-  const getL2 = (): Vector => {
-    return Array(m).fill(1);
-  };
-
-  const l1 = getL1();
-  const l2 = getL2();
-
-  const delta = addVectors(l1, l2);
-  return delta;
-};
-
-const forcePositiveNumberVector = (vector: Vector): Vector => {
-  return vector.map((val) => Math.max(0, val));
-};
-
-// const forceIntegerVector = (vector: Vector): Vector => {
-//   return vector.map((val) => Math.round(val));
+// const norm1Matrix = (matrix: Matrix): number => {
+//   return matrix.reduce((max, row) => {
+//     const rowSum = row.reduce((sum, val) => sum + Math.abs(val), 0);
+//     return Math.max(max, rowSum);
+//   }, 0);
 // };
 
-const findButtonCombination = (
-  machine: Machine
-): { joltage: Vector; presses: Vector } => {
-  /** Number of buttons */
-  const m = machine.buttons.length;
-  /** Number of lights */
-  // const n = machine.joltage.length;
+// const getDelta = (a: Matrix, r: Vector): Vector => {
+//   const m = a[0].length;
+//   const n = a.length;
 
-  const a = getButtonsMatrix(machine);
+//   const getL1 = (): Vector => {
+//     const delta: Vector = Array(m).fill(0);
 
-  const y = multiplyVectorScalar(machine.joltage, -1);
+//     for (let i = 0; i < n; i++) {
+//       for (let j = 0; j < m; j++) {
+//         delta[j] += a[i][j] * Math.sign(r[i]);
+//       }
+//     }
 
-  let x = Array(m).fill(10);
-  let r = addVectors(multiplyMatrixVector(a, x), y);
+//     return delta;
+//   };
 
-  let iteration = 0;
-  while (norm1Matrix([r]) > 0.0001) {
-    iteration++;
-    const learningRate = 10 / iteration;
-    const delta = getDelta(a, r);
+//   const getL2 = (): Vector => {
+//     return Array(m).fill(1);
+//   };
 
-    x = addVectors(x, multiplyVectorScalar(delta, -learningRate));
-    r = addVectors(multiplyMatrixVector(a, x), y);
-    x = forcePositiveNumberVector(x);
+//   const l1 = getL1();
+//   const l2 = getL2();
+
+//   const delta = addVectors(l1, l2);
+//   return delta;
+// };
+
+// const forcePositiveNumberVector = (vector: Vector): Vector => {
+//   return vector.map((val) => Math.max(0, val));
+// };
+
+const invertSquareMatrix = (matrix: Matrix): Matrix => {
+  const n = matrix.length;
+  const identity: Matrix = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))
+  );
+
+  const augmented: Matrix = matrix.map((row, i) => [...row, ...identity[i]]);
+
+  for (let i = 0; i < n; i++) {
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
+        maxRow = k;
+      }
+    }
+    [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
+
+    const pivot = augmented[i][i];
+    if (pivot === 0) {
+      throw new Error("Matrix is singular and cannot be inverted.");
+    }
+    for (let j = 0; j < 2 * n; j++) {
+      augmented[i][j] /= pivot;
+    }
+
+    for (let k = 0; k < n; k++) {
+      if (k !== i) {
+        const factor = augmented[k][i];
+        for (let j = 0; j < 2 * n; j++) {
+          augmented[k][j] -= factor * augmented[i][j];
+        }
+      }
+    }
   }
-  return { joltage: multiplyMatrixVector(a, x), presses: x };
+
+  const inverse: Matrix = augmented.map((row) => row.slice(n));
+  return inverse;
+};
+
+const transposeMatrix = (matrix: Matrix): Matrix => {
+  const transposed: Matrix = Array.from({ length: matrix[0].length }, () =>
+    Array(matrix.length).fill(0)
+  );
+
+  for (let i = 0; i < matrix.length; i++) {
+    for (let j = 0; j < matrix[0].length; j++) {
+      transposed[j][i] = matrix[i][j];
+    }
+  }
+
+  return transposed;
+};
+
+const multiplyMatrixMatrix = (a: Matrix, b: Matrix): Matrix => {
+  const result: Matrix = Array.from({ length: a.length }, () =>
+    Array(b[0].length).fill(0)
+  );
+
+  for (let i = 0; i < a.length; i++) {
+    for (let j = 0; j < b[0].length; j++) {
+      for (let k = 0; k < a[0].length; k++) {
+        result[i][j] += a[i][k] * b[k][j];
+      }
+    }
+  }
+
+  return result;
+};
+
+const findButtonCombination = (machine: Machine): Vector => {
+  const A = getButtonsMatrix(machine);
+  const AT = transposeMatrix(A);
+  const B = multiplyMatrixMatrix(AT, A);
+  const BInv = invertSquareMatrix(B);
+  const pseudoInverse = multiplyMatrixMatrix(BInv, AT);
+
+  let presses: Vector = multiplyMatrixVector(pseudoInverse, machine.joltage);
+  return presses;
 };
 
 const combinations = input.map(findButtonCombination);
 console.log(combinations);
 
 const presses = combinations.map((combination) =>
-  combination.presses.reduce((sum, val) => sum + Math.round(val), 0)
+  combination.reduce((sum, val) => sum + Math.round(val), 0)
 );
 
 const result = presses.reduce((sum, val) => sum + Math.round(val), 0);
