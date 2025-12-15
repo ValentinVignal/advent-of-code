@@ -1,6 +1,8 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
+// https://en.wikipedia.org/wiki/Linear_least_squares
+
 const example = true;
 const textInput = readFileSync(
   path.join(__dirname, `input${example ? "-example" : ""}.txt`),
