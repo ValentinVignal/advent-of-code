@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = 3;
+const example = 4;
 const log = example > 0;
 const textInput = readFileSync(
   path.join(
@@ -163,6 +163,7 @@ const isAllGreen = (a: Position, b: Position): boolean => {
     const getCrossAxis = (pos: Position): number =>
       direction === Alignment.Horizontal ? pos.y : pos.x;
     let previousSign: Sign | null = null;
+    /** Whether we are withing the loop. */
     let isInside = false;
     const intersectingCrossEdges = (
       direction === Alignment.Horizontal ? verticalEdges : horizontalEdges
@@ -202,16 +203,17 @@ const isAllGreen = (a: Position, b: Position): boolean => {
       const x = indexes[currentIndex];
       const crossEdge = intersectingCrossEdges.find((edge) => {
         if (getMainAxis(edge.from) !== x) return false;
+        return true;
 
-        const minYEdge = Math.min(
-          getCrossAxis(edge.from),
-          getCrossAxis(edge.to)
-        );
-        const maxYEdge = Math.max(
-          getCrossAxis(edge.from),
-          getCrossAxis(edge.to)
-        );
-        return minYEdge <= getCrossAxis(from) && maxYEdge >= getCrossAxis(from);
+        // const minYEdge = Math.min(
+        //   getCrossAxis(edge.from),
+        //   getCrossAxis(edge.to)
+        // );
+        // const maxYEdge = Math.max(
+        //   getCrossAxis(edge.from),
+        //   getCrossAxis(edge.to)
+        // );
+        // return minYEdge <= getCrossAxis(from) && maxYEdge >= getCrossAxis(from);
       });
       const isOnCrossEdge = !!crossEdge;
 
@@ -228,6 +230,8 @@ const isAllGreen = (a: Position, b: Position): boolean => {
       });
       const isOnParallelEdge = !!parallelEdge;
 
+      /** Whether the current position considered ({@link x}) is within the
+       * rectangle edge that is being checked ({@link from} and {@link to}). */
       const isInsideCheckRectangleEdge =
         getMainAxis(from) <= x && x <= getMainAxis(to);
 
@@ -244,9 +248,8 @@ const isAllGreen = (a: Position, b: Position): boolean => {
       }
 
       const isOnCorner =
-        x === getMainAxis(crossEdge.from) &&
-        (getCrossAxis(crossEdge.from) === getCrossAxis(from) ||
-          getCrossAxis(crossEdge.to) === getCrossAxis(from));
+        getCrossAxis(crossEdge.from) === getCrossAxis(from) ||
+        getCrossAxis(crossEdge.to) === getCrossAxis(from);
 
       if (!isOnCorner) {
         isInside = !isInside;
