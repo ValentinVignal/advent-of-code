@@ -1,8 +1,7 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = 4;
-const log = example > 0;
+const example = 0;
 const textInput = readFileSync(
   path.join(
     __dirname,
@@ -12,6 +11,8 @@ const textInput = readFileSync(
   ),
   "utf-8"
 );
+
+const isExample = example > 0;
 
 type Position = {
   x: number;
@@ -101,7 +102,9 @@ const isInsideEdge = (position: Position): PositionLocation => {
 
 /** Log the grid into a text file */
 const logGridInFile = (foundPositions?: [Position, Position]): void => {
-  if (!log) return;
+  if (!isExample) {
+    return;
+  }
   const minX = Math.min(...input.map((pos) => pos.x));
   const maxX = Math.max(...input.map((pos) => pos.x));
   const minY = Math.min(...input.map((pos) => pos.y));
@@ -111,15 +114,23 @@ const logGridInFile = (foundPositions?: [Position, Position]): void => {
 
   let output = " ";
   for (let column = minX; column <= maxX; column++) {
-    output += `\x1b[1m\x1b[3${column % 10 ? "4" : "0"}m${(
-      column % 10
-    ).toString()}\x1b[0m`;
+    if (isExample) {
+      output += `\x1b[1m\x1b[3${column % 10 ? "4" : "0"}m`;
+    }
+    output += (column % 10).toString();
+    if (isExample) {
+      output += `\x1b[0m`;
+    }
   }
   output += "\n";
   for (let line = minY; line <= maxY; line++) {
-    output += `\x1b[1m\x1b[3${line % 10 ? "4" : "0"}m${(
-      line % 10
-    ).toString()}\x1b[0m`;
+    if (isExample) {
+      output += `\x1b[1m\x1b[3${line % 10 ? "4" : "0"}m`;
+    }
+    output += (line % 10).toString();
+    if (isExample) {
+      output += `\x1b[0m`;
+    }
     for (let column = minX; column <= maxX; column++) {
       const position = { x: column, y: line };
       if (
@@ -129,12 +140,24 @@ const logGridInFile = (foundPositions?: [Position, Position]): void => {
           (position.x === foundPositions[1].x &&
             position.y === foundPositions[1].y))
       ) {
-        output += "\x1b[1m\x1b[33mO\x1b[0m";
+        if (isExample) {
+          output += `\x1b[1m\x1b[33m`;
+        }
+        output += "O";
+        if (isExample) {
+          output += `\x1b[0m`;
+        }
         continue;
       }
       const location = isInsideEdge(position);
       if (location === PositionLocation.Corner) {
-        output += "\x1b[1m\x1b[35m#\x1b[0m";
+        if (isExample) {
+          output += `\x1b[1m\x1b[35m`;
+        }
+        output += "#";
+        if (isExample) {
+          output += `\x1b[0m`;
+        }
       } else if (location === PositionLocation.Inside) {
         output += "X";
       } else {
@@ -294,28 +317,36 @@ const isAllGreen = (a: Position, b: Position): boolean => {
 };
 
 let maxArea = 0;
+type PositionPair = { a: Position; b: Position };
 let positions: { a: Position; b: Position };
 
+const allPositions: PositionPair[] = [];
 for (let i = 0; i < input.length; i++) {
   for (let j = i + 1; j < input.length; j++) {
-    const posA = input[i];
-    const posB = input[j];
-
-    // if (posA.x === 4 && posA.y === 16 && posB.x === 20 && posB.y === 2) {
-    if (posA.x === 9 && posA.y === 5 && posB.x === 2 && posB.y === 3) {
-      console.log("debug");
-    }
-
-    if (!isAllGreen(posA, posB)) {
-      continue;
-    }
-
-    const area = Math.abs(posA.x - posB.x + 1) * Math.abs(posA.y - posB.y + 1);
-    if (area > maxArea) {
-      maxArea = area;
-      positions = { a: posA, b: posB };
-    }
+    allPositions.push({ a: input[i], b: input[j] });
   }
+}
+
+allPositions.sort((a, b) => {
+  const areaA = (Math.abs(a.a.x - a.b.x) + 1) * (Math.abs(a.a.y - a.b.y) + 1);
+  const areaB = (Math.abs(b.a.x - b.b.x) + 1) * (Math.abs(b.a.y - b.b.y) + 1);
+  return areaB - areaA;
+});
+
+for (const { a: posA, b: posB } of allPositions) {
+  // if (posA.x === 4 && posA.y === 16 && posB.x === 20 && posB.y === 2) {
+  if (posA.x === 9 && posA.y === 5 && posB.x === 2 && posB.y === 3) {
+    console.log("debug");
+  }
+
+  if (!isAllGreen(posA, posB)) {
+    logGridInFile([posA, posB]);
+    continue;
+  }
+
+  maxArea = (Math.abs(posA.x - posB.x) + 1) * (Math.abs(posA.y - posB.y) + 1);
+  positions = { a: posA, b: posB };
+  break;
 }
 
 logGridInFile([positions!.a, positions!.b]);
@@ -323,4 +354,4 @@ logGridInFile([positions!.a, positions!.b]);
 console.log(positions!);
 // x < 2791469338 < 2916646439 < 2945126325
 // x != 1529641011
-console.log("result:", maxArea); //
+console.log("result:", maxArea); // 1529675217
