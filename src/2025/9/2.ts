@@ -1,0 +1,357 @@
+import { readFileSync } from "fs";
+import * as path from "path";
+
+const example = 0;
+const textInput = readFileSync(
+  path.join(
+    __dirname,
+    `input${
+      example ? (example > 1 ? `-example-${example}` : "-example") : ""
+    }.txt`
+  ),
+  "utf-8"
+);
+
+const isExample = example > 0;
+
+type Position = {
+  x: number;
+  y: number;
+};
+
+const input = textInput
+  .split("\n")
+  .filter(Boolean)
+  .map((line) => {
+    const [x, y] = line.split(",").map(Number);
+    return { x, y } as Position;
+  });
+
+console.log(input);
+
+enum Alignment {
+  Horizontal,
+  Vertical,
+}
+
+type Sign = 1 | -1;
+
+type Edge = {
+  from: Position;
+  to: Position;
+  alignment: Alignment;
+  sign: Sign;
+};
+
+const edges: Edge[] = input.map((from, index) => {
+  let to = input[index === input.length - 1 ? 0 : index + 1];
+  const alignment = from.x === to.x ? Alignment.Vertical : Alignment.Horizontal;
+  const sign =
+    alignment === Alignment.Horizontal
+      ? from.x < to.x
+        ? 1
+        : -1
+      : from.y < to.y
+        ? 1
+        : -1;
+
+  return { from, to, alignment, sign };
+});
+
+const verticalEdges = edges.filter(
+  (edge) => edge.alignment === Alignment.Vertical
+);
+const horizontalEdges = edges.filter(
+  (edge) => edge.alignment === Alignment.Horizontal
+);
+
+enum PositionLocation {
+  Corner,
+  Inside,
+  Outside,
+}
+
+const isInsideEdge = (position: Position): PositionLocation => {
+  let result = PositionLocation.Outside;
+  for (const edge of edges) {
+    if (
+      (edge.to.x === position.x && edge.to.y === position.y) ||
+      (edge.from.x === position.x && edge.from.y === position.y)
+    ) {
+      return PositionLocation.Corner;
+    } else if (edge.alignment === Alignment.Horizontal) {
+      if (
+        position.y === edge.from.y &&
+        position.x >= Math.min(edge.from.x, edge.to.x) &&
+        position.x <= Math.max(edge.from.x, edge.to.x)
+      ) {
+        result = PositionLocation.Inside;
+      }
+    } else if (edge.alignment === Alignment.Vertical) {
+      if (
+        position.x === edge.from.x &&
+        position.y >= Math.min(edge.from.y, edge.to.y) &&
+        position.y <= Math.max(edge.from.y, edge.to.y)
+      ) {
+        result = PositionLocation.Inside;
+      }
+    }
+  }
+  return result;
+};
+
+/** Log the grid into a text file */
+const logGridInFile = (foundPositions?: [Position, Position]): void => {
+  if (!isExample) {
+    return;
+  }
+  const minX = Math.min(...input.map((pos) => pos.x));
+  const maxX = Math.max(...input.map((pos) => pos.x));
+  const minY = Math.min(...input.map((pos) => pos.y));
+  const maxY = Math.max(...input.map((pos) => pos.y));
+
+  console.log({ minX, maxX, minY, maxY });
+
+  let output = " ";
+  for (let column = minX; column <= maxX; column++) {
+    if (isExample) {
+      output += `\x1b[1m\x1b[3${column % 10 ? "4" : "0"}m`;
+    }
+    output += (column % 10).toString();
+    if (isExample) {
+      output += `\x1b[0m`;
+    }
+  }
+  output += "\n";
+  for (let line = minY; line <= maxY; line++) {
+    if (isExample) {
+      output += `\x1b[1m\x1b[3${line % 10 ? "4" : "0"}m`;
+    }
+    output += (line % 10).toString();
+    if (isExample) {
+      output += `\x1b[0m`;
+    }
+    for (let column = minX; column <= maxX; column++) {
+      const position = { x: column, y: line };
+      if (
+        foundPositions &&
+        ((position.x === foundPositions[0].x &&
+          position.y === foundPositions[0].y) ||
+          (position.x === foundPositions[1].x &&
+            position.y === foundPositions[1].y))
+      ) {
+        if (isExample) {
+          output += `\x1b[1m\x1b[33m`;
+        }
+        output += "O";
+        if (isExample) {
+          output += `\x1b[0m`;
+        }
+        continue;
+      }
+      const location = isInsideEdge(position);
+      if (location === PositionLocation.Corner) {
+        if (isExample) {
+          output += `\x1b[1m\x1b[35m`;
+        }
+        output += "#";
+        if (isExample) {
+          output += `\x1b[0m`;
+        }
+      } else if (location === PositionLocation.Inside) {
+        output += "X";
+      } else {
+        output += ".";
+      }
+    }
+    output += "\n";
+  }
+
+  console.log(output);
+};
+
+logGridInFile();
+
+const isAllGreen = (a: Position, b: Position): boolean => {
+  /** Checks whether the horizontal edge between two positions is fully inside the shape */
+  const checkRectangleEdge = (from: Position, to: Position): boolean => {
+    const direction =
+      from.x === to.x ? Alignment.Vertical : Alignment.Horizontal;
+
+    /** Returns the main axis value of a position based on the direction */
+    const getMainAxis = (pos: Position): number =>
+      direction === Alignment.Horizontal ? pos.x : pos.y;
+
+    /** Returns the cross axis value of a position based on the direction */
+    const getCrossAxis = (pos: Position): number =>
+      direction === Alignment.Horizontal ? pos.y : pos.x;
+    let previousSign: Sign | null = null;
+    /** Whether we are withing the loop. */
+    let isInside = false;
+    const intersectingCrossEdges = (
+      direction === Alignment.Horizontal ? verticalEdges : horizontalEdges
+    )
+      .filter((edge) => {
+        const minCross = Math.min(
+          getCrossAxis(edge.from),
+          getCrossAxis(edge.to)
+        );
+        const maxCross = Math.max(
+          getCrossAxis(edge.from),
+          getCrossAxis(edge.to)
+        );
+        return (
+          // We don't want to test `getMainAxis(edge.from) >= getMainAxis(from)`
+          // because we need to consider all the edges from the index 0.
+          getMainAxis(edge.from) <= getMainAxis(to) &&
+          minCross <= getCrossAxis(from) &&
+          maxCross >= getCrossAxis(from)
+        );
+      })
+      .sort((a, b) => getMainAxis(a.from) - getMainAxis(b.from));
+    const indexes = [
+      ...intersectingCrossEdges.map((edge) => getMainAxis(edge.from)),
+      getMainAxis(from),
+      getMainAxis(to),
+    ]
+      .flatMap((value) => [value - 1, value, value + 1])
+      .filter((v, i, s) => s.indexOf(v) === i)
+      .sort((a, b) => a - b);
+    let currentIndex = -1;
+    while (
+      indexes[currentIndex + 1] <= getMainAxis(to) &&
+      currentIndex + 1 < indexes.length
+    ) {
+      currentIndex++;
+      const x = indexes[currentIndex];
+      const crossEdge = intersectingCrossEdges.find((edge) => {
+        if (getMainAxis(edge.from) !== x) return false;
+        return true;
+
+        // const minYEdge = Math.min(
+        //   getCrossAxis(edge.from),
+        //   getCrossAxis(edge.to)
+        // );
+        // const maxYEdge = Math.max(
+        //   getCrossAxis(edge.from),
+        //   getCrossAxis(edge.to)
+        // );
+        // return minYEdge <= getCrossAxis(from) && maxYEdge >= getCrossAxis(from);
+      });
+      const isOnCrossEdge = !!crossEdge;
+
+      const parallelEdge = (
+        direction === Alignment.Horizontal ? horizontalEdges : verticalEdges
+      ).find((edge) => {
+        const minXEdge = Math.min(getMainAxis(edge.from), getMainAxis(edge.to));
+        const maxXEdge = Math.max(getMainAxis(edge.from), getMainAxis(edge.to));
+        return (
+          getCrossAxis(edge.from) === getCrossAxis(from) &&
+          minXEdge <= x &&
+          maxXEdge >= x
+        );
+      });
+      const isOnParallelEdge = !!parallelEdge;
+
+      /** Whether the current position considered ({@link x}) is within the
+       * rectangle edge that is being checked ({@link from} and {@link to}). */
+      const isInsideCheckRectangleEdge =
+        getMainAxis(from) <= x && x <= getMainAxis(to);
+
+      if (
+        !isInside &&
+        !isOnCrossEdge &&
+        !isOnParallelEdge &&
+        isInsideCheckRectangleEdge
+      ) {
+        return false;
+      }
+      if (!isOnCrossEdge) {
+        continue;
+      }
+
+      const isOnCorner =
+        getCrossAxis(crossEdge.from) === getCrossAxis(from) ||
+        getCrossAxis(crossEdge.to) === getCrossAxis(from);
+
+      if (!isOnCorner) {
+        isInside = !isInside;
+        continue;
+      }
+
+      if (
+        Math.min(
+          getMainAxis(parallelEdge!.from),
+          getMainAxis(parallelEdge!.to)
+        ) === x
+      ) {
+        // We are entering the horizontal edge.
+        previousSign = crossEdge!.sign;
+      } else {
+        // We are exiting the horizontal edge.
+
+        if (previousSign === crossEdge!.sign) {
+          isInside = !isInside;
+        } else {
+          // Do nothing.
+        }
+        previousSign = null;
+      }
+    }
+    return true;
+  };
+
+  const corners = {
+    topLeft: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) },
+    topRight: { x: Math.max(a.x, b.x), y: Math.min(a.y, b.y) },
+    bottomLeft: { x: Math.min(a.x, b.x), y: Math.max(a.y, b.y) },
+    bottomRight: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y) },
+  };
+
+  return (
+    checkRectangleEdge(corners.topLeft, corners.topRight) &&
+    checkRectangleEdge(corners.bottomLeft, corners.bottomRight) &&
+    checkRectangleEdge(corners.topLeft, corners.bottomLeft) &&
+    checkRectangleEdge(corners.topRight, corners.bottomRight)
+  );
+};
+
+let maxArea = 0;
+type PositionPair = { a: Position; b: Position };
+let positions: { a: Position; b: Position };
+
+const allPositions: PositionPair[] = [];
+for (let i = 0; i < input.length; i++) {
+  for (let j = i + 1; j < input.length; j++) {
+    allPositions.push({ a: input[i], b: input[j] });
+  }
+}
+
+allPositions.sort((a, b) => {
+  const areaA = (Math.abs(a.a.x - a.b.x) + 1) * (Math.abs(a.a.y - a.b.y) + 1);
+  const areaB = (Math.abs(b.a.x - b.b.x) + 1) * (Math.abs(b.a.y - b.b.y) + 1);
+  return areaB - areaA;
+});
+
+for (const { a: posA, b: posB } of allPositions) {
+  // if (posA.x === 4 && posA.y === 16 && posB.x === 20 && posB.y === 2) {
+  if (posA.x === 9 && posA.y === 5 && posB.x === 2 && posB.y === 3) {
+    console.log("debug");
+  }
+
+  if (!isAllGreen(posA, posB)) {
+    logGridInFile([posA, posB]);
+    continue;
+  }
+
+  maxArea = (Math.abs(posA.x - posB.x) + 1) * (Math.abs(posA.y - posB.y) + 1);
+  positions = { a: posA, b: posB };
+  break;
+}
+
+logGridInFile([positions!.a, positions!.b]);
+
+console.log(positions!);
+// x < 2791469338 < 2916646439 < 2945126325
+// x != 1529641011
+console.log("result:", maxArea); // 1529675217
