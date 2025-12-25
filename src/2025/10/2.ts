@@ -1,7 +1,9 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = false;
+// https://en.wikipedia.org/wiki/Linear_least_squares
+
+const example = true;
 const textInput = readFileSync(
   path.join(__dirname, `input${example ? "-example" : ""}.txt`),
   "utf-8"
@@ -12,6 +14,10 @@ type Button = number[];
 type Machine = {
   joltage: number[];
   buttons: Button[];
+};
+
+const scalarProduct = (a: number[], b: number[]): number => {
+  return a.reduce((sum, val, index) => sum + val * b[index], 0);
 };
 
 const input: Machine[] = textInput
@@ -36,75 +42,159 @@ const input: Machine[] = textInput
     return { joltage, buttons };
   });
 
-type MachineState = Machine & {
-  state: number[];
-  lastPressed?: number;
-  presses: number[];
+type Vector = number[];
+type Matrix = number[][];
+
+// const addVectors = (a: Vector, b: Vector): Vector => {
+//   return a.map((val, index) => val + b[index]);
+// };
+
+const multiplyMatrixVector = (matrix: Matrix, vector: Vector): Vector => {
+  return matrix.map((row) => scalarProduct(row, vector));
 };
 
-const isStateValid = (state: MachineState): boolean =>
-  state.state.every((joltage, index) => joltage <= state.joltage[index]);
+// const multiplyVectorScalar = (matrix: Vector, scalar: number): Vector => {
+//   return matrix.map((val) => val * scalar);
+// };
 
-const isStateFinal = (state: MachineState): boolean =>
-  state.state.every((joltage, index) => joltage === state.joltage[index]);
+const getButtonsMatrix = (machine: Machine): Matrix => {
+  const matrix = Array.from({ length: machine.joltage.length }, () =>
+    Array(machine.buttons.length).fill(0)
+  );
 
-const states: MachineState[] = input.map((machine) => ({
-  ...machine,
-  state: Array(machine.joltage.length).fill(0),
-  presses: Array(machine.buttons.length).fill(0),
-}));
-
-const stateToString = (state: MachineState): string => {
-  return `${state.state.join(",")}`;
+  for (const [buttonIndex, button] of machine.buttons.entries()) {
+    for (const joltageIndex of button) {
+      matrix[joltageIndex][buttonIndex] = 1;
+    }
+  }
+  return matrix;
 };
 
-const findFewestPresses = (machine: MachineState): number => {
-  const cache = new Map<string, number>();
-  const findFewestPressesRecursive = (machineState: MachineState): number => {
-    const stateKey = stateToString(machineState);
-    if (cache.has(stateKey)) {
-      return cache.get(stateKey)!;
+// const norm1Matrix = (matrix: Matrix): number => {
+//   return matrix.reduce((max, row) => {
+//     const rowSum = row.reduce((sum, val) => sum + Math.abs(val), 0);
+//     return Math.max(max, rowSum);
+//   }, 0);
+// };
+
+// const getDelta = (a: Matrix, r: Vector): Vector => {
+//   const m = a[0].length;
+//   const n = a.length;
+
+//   const getL1 = (): Vector => {
+//     const delta: Vector = Array(m).fill(0);
+
+//     for (let i = 0; i < n; i++) {
+//       for (let j = 0; j < m; j++) {
+//         delta[j] += a[i][j] * Math.sign(r[i]);
+//       }
+//     }
+
+//     return delta;
+//   };
+
+//   const getL2 = (): Vector => {
+//     return Array(m).fill(1);
+//   };
+
+//   const l1 = getL1();
+//   const l2 = getL2();
+
+//   const delta = addVectors(l1, l2);
+//   return delta;
+// };
+
+// const forcePositiveNumberVector = (vector: Vector): Vector => {
+//   return vector.map((val) => Math.max(0, val));
+// };
+
+const invertSquareMatrix = (matrix: Matrix): Matrix => {
+  const n = matrix.length;
+  const identity: Matrix = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))
+  );
+
+  const augmented: Matrix = matrix.map((row, i) => [...row, ...identity[i]]);
+
+  for (let i = 0; i < n; i++) {
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
+        maxRow = k;
+      }
+    }
+    [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
+
+    const pivot = augmented[i][i];
+    if (pivot === 0) {
+      throw new Error("Matrix is singular and cannot be inverted.");
+    }
+    for (let j = 0; j < 2 * n; j++) {
+      augmented[i][j] /= pivot;
     }
 
-    if (isStateFinal(machineState)) {
-      console.log("Final state reached:", stateKey);
-      cache.set(stateKey, 0);
-      return 0;
-    }
-    if (!isStateValid(machineState)) {
-      return Infinity;
-    }
-
-    const newStates: MachineState[] = machineState.buttons
-      .map((button, index) => {
-        if ((machineState.lastPressed ?? 0) > index) {
-          return null;
+    for (let k = 0; k < n; k++) {
+      if (k !== i) {
+        const factor = augmented[k][i];
+        for (let j = 0; j < 2 * n; j++) {
+          augmented[k][j] -= factor * augmented[i][j];
         }
-        const newState = structuredClone(machineState);
-        newState.lastPressed = index;
-        newState.presses[index]++;
-        for (const lightIndex of button) {
-          newState.state[lightIndex]++;
-        }
-        return newState;
-      })
-      .filter((state) => !!state) as MachineState[];
+      }
+    }
+  }
 
-    const pressesCounts =
-      1 + Math.min(...newStates.map(findFewestPressesRecursive));
-
-    cache.set(stateKey, pressesCounts);
-    return pressesCounts;
-  };
-
-  return findFewestPressesRecursive(machine);
+  const inverse: Matrix = augmented.map((row) => row.slice(n));
+  return inverse;
 };
 
-const results = states.map((machine, index) => {
-  console.log(`Processing machine ${index + 1}/${states.length}`);
-  return findFewestPresses(machine);
-});
+const transposeMatrix = (matrix: Matrix): Matrix => {
+  const transposed: Matrix = Array.from({ length: matrix[0].length }, () =>
+    Array(matrix.length).fill(0)
+  );
 
-const result = results.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < matrix.length; i++) {
+    for (let j = 0; j < matrix[0].length; j++) {
+      transposed[j][i] = matrix[i][j];
+    }
+  }
 
-console.log("Result:", result);
+  return transposed;
+};
+
+const multiplyMatrixMatrix = (a: Matrix, b: Matrix): Matrix => {
+  const result: Matrix = Array.from({ length: a.length }, () =>
+    Array(b[0].length).fill(0)
+  );
+
+  for (let i = 0; i < a.length; i++) {
+    for (let j = 0; j < b[0].length; j++) {
+      for (let k = 0; k < a[0].length; k++) {
+        result[i][j] += a[i][k] * b[k][j];
+      }
+    }
+  }
+
+  return result;
+};
+
+const findButtonCombination = (machine: Machine): Vector => {
+  const A = getButtonsMatrix(machine);
+  const AT = transposeMatrix(A);
+  const B = multiplyMatrixMatrix(AT, A);
+  const BInv = invertSquareMatrix(B);
+  const pseudoInverse = multiplyMatrixMatrix(BInv, AT);
+
+  let presses: Vector = multiplyMatrixVector(pseudoInverse, machine.joltage);
+  return presses;
+};
+
+const combinations = input.map(findButtonCombination);
+console.log(combinations);
+
+const presses = combinations.map((combination) =>
+  combination.reduce((sum, val) => sum + Math.round(val), 0)
+);
+
+const result = presses.reduce((sum, val) => sum + Math.round(val), 0);
+
+console.log(result);

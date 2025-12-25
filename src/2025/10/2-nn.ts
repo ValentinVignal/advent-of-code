@@ -1,6 +1,12 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
+// https://en.wikipedia.org/wiki/Integer_programming
+// https://en.wikipedia.org/wiki/Diophantine_equation
+// https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm
+// https://en.wikipedia.org/wiki/Gaussian_elimination
+// https://en.wikipedia.org/wiki/Branch_and_bound
+
 const example = true;
 const textInput = readFileSync(
   path.join(__dirname, `input${example ? "-example" : ""}.txt`),
