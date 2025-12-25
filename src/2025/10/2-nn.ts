@@ -69,68 +69,107 @@ const getButtonsMatrix = (machine: Machine): Matrix => {
   return matrix;
 };
 
-const norm1Matrix = (matrix: Matrix): number => {
-  return matrix.reduce((max, row) => {
-    const rowSum = row.reduce((sum, val) => sum + Math.abs(val), 0);
-    return Math.max(max, rowSum);
-  }, 0);
-};
-
-const getDelta = (a: Matrix, r: Vector): Vector => {
-  const m = a[0].length;
-  const n = a.length;
-
-  const getL1 = (): Vector => {
-    const delta: Vector = Array(m).fill(0);
-
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < m; j++) {
-        delta[j] += a[i][j] * Math.sign(r[i]);
-      }
-    }
-
-    return delta;
-  };
-
-  const getL2 = (): Vector => {
-    return Array(m).fill(1);
-  };
-
-  const l1 = getL1();
-  const l2 = getL2();
-
-  const delta = addVectors(l1, l2);
-  return delta;
-};
-
 const forcePositiveNumberVector = (vector: Vector): Vector => {
   return vector.map((val) => Math.max(0, val));
 };
-
-// const forceIntegerVector = (vector: Vector): Vector => {
-//   return vector.map((val) => Math.round(val));
-// };
 
 const findButtonCombination = (
   machine: Machine
 ): { joltage: Vector; presses: Vector } => {
   /** Number of buttons */
-  const m = machine.buttons.length;
+  const n = machine.buttons.length;
   /** Number of lights */
   // const n = machine.joltage.length;
 
   const a = getButtonsMatrix(machine);
 
+  let x = Array(n).fill(0);
   const y = multiplyVectorScalar(machine.joltage, -1);
-
-  let x = Array(m).fill(10);
   let r = addVectors(multiplyMatrixVector(a, x), y);
 
+  /** Returns the total loss */
+  const getLoss = (): number => {
+    /** The norm 2 loss that measures the squared error */
+    const getL2 = (): number => {
+      return scalarProduct(r, r);
+    };
+
+    /** The "positive" loss that penalizes negative values */
+    const getLp = () => {
+      return x.reduce((sum, val) => {
+        if (val > 0) {
+          return sum;
+        }
+        return sum + Math.exp(-val) - 1;
+      }, 0);
+    };
+
+    /** The "natural" loss that encourages integer values */
+    const getLn = () => {
+      return x.reduce((sum, val) => {
+        const round = Math.round(val);
+        const sign = Math.sign(val - round);
+        const value = 1 / (Math.abs(val - round + sign * 0.5) + 0.0001);
+        return sum + value;
+      }, 0);
+    };
+    return getL2() + getLp() + getLn();
+  };
+
+  const getDelta = (): Vector => {
+    const getDeltaL2 = (): Vector => {
+      const delta: Vector = Array(n).fill(0);
+
+      for (let i = 0; i < machine.joltage.length; i++) {
+        for (let j = 0; j < n; j++) {
+          delta[j] += 2 * a[i][j] * r[i];
+        }
+      }
+
+      return delta;
+    };
+
+    const getDeltaLp = (): Vector => {
+      const delta: Vector = Array(n).fill(0);
+
+      for (let j = 0; j < n; j++) {
+        if (x[j] >= 0) {
+          delta[j] += 0;
+        } else {
+          delta[j] += -Math.exp(-x[j]);
+        }
+      }
+      return delta;
+    };
+
+    const getDeltaLn = (): Vector => {
+      const delta: Vector = Array(n).fill(0);
+
+      for (let j = 0; j < n; j++) {
+        const round = Math.round(x[j]);
+        const sign = Math.sign(x[j] - round);
+        const denom = Math.abs(x[j] - round + sign * 0.5) + 0.0001;
+        delta[j] += -sign / (denom * denom);
+      }
+      return delta;
+    };
+
+    const deltaL2 = getDeltaL2();
+    const deltaLp = getDeltaLp();
+    const deltaLn = getDeltaLn();
+
+    const delta = addVectors(addVectors(deltaL2, deltaLp), deltaLn);
+    return delta;
+  };
+
   let iteration = 0;
-  while (norm1Matrix([r]) > 0.0001) {
+  while (getLoss() > 0.0001) {
     iteration++;
-    const learningRate = 10 / iteration;
-    const delta = getDelta(a, r);
+    if (!(iteration % 10000)) {
+      console.log("Iteration:", iteration, "Loss:", getLoss());
+    }
+    const learningRate = 0.01 * (100 / (100 + iteration));
+    const delta = getDelta();
 
     x = addVectors(x, multiplyVectorScalar(delta, -learningRate));
     r = addVectors(multiplyMatrixVector(a, x), y);
