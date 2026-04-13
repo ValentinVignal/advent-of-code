@@ -208,6 +208,11 @@ const xyToString = (xy: XY): string => {
   return `${xy.x},${xy.y}`;
 };
 
+const xyFromString = (s: string): XY => {
+  const [x, y] = s.split(",").map(Number);
+  return { x, y };
+};
+
 enum OutputType {
   Paint,
   Turn,
@@ -221,7 +226,9 @@ enum Direction {
 }
 
 class PaintRobot {
-  constructor() {}
+  constructor() {
+    this.map.set(xyToString(this.position), 1n);
+  }
 
   private map = new Map<string, bigint>();
 
@@ -271,8 +278,37 @@ class PaintRobot {
     this.program.run();
   }
 
-  get paintCount(): number {
-    return this.map.size;
+  print(): void {
+    const positions = [...this.map.keys()].map(xyFromString);
+    const minX = Math.min(...positions.map((value) => value.x));
+    const maxX = Math.max(...positions.map((value) => value.x));
+    const minY = Math.min(...positions.map((value) => value.y));
+    const maxY = Math.max(...positions.map((value) => value.y));
+
+    console.log(minX, maxX, minY, maxY);
+
+    const width = maxX - minX + 1;
+    const height = maxY - minY + 1;
+
+    const grid = Array.from({ length: height }, () =>
+      Array.from({ length: width }, () => "."),
+    );
+
+    console.log("grid length", grid.length);
+
+    for (const [key, value] of this.map) {
+      const position = xyFromString(key);
+      let s: string;
+      if (value === 0n) {
+        continue;
+      } else {
+        s = "\x1b[1m\x1b[34m#\x1b[0m";
+      }
+      grid[height - (position.y - minY) - 1][width - 1 - (position.x - minX)] =
+        s;
+    }
+    const s = grid.map((row) => row.join("")).join("\n");
+    console.log(s);
   }
 }
 
@@ -280,6 +316,4 @@ const paintRobot = new PaintRobot();
 
 paintRobot.run();
 
-const result = paintRobot.paintCount;
-
-console.log(result); // 2184
+paintRobot.print(); // AHCHZEPK
