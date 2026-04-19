@@ -9,8 +9,6 @@ const intCode = new Map<bigint, bigint>(
   ].map(([index, value]) => [BigInt(index), value]),
 );
 
-intCode.set(0n, 2n);
-
 enum Mode {
   Position = 0,
   Immediate = 1,
@@ -271,73 +269,64 @@ class RepairDroid {
     async () => this.shouldHalt,
   );
 
-  async explore(): Promise<void> {
+  async explore(): Promise<Map<string, OutputType>> {
     const grid = new Map<string, OutputType>();
-    const stack = [];
-    for (const movement of [
-      Movement.North,
-      Movement.South,
-      Movement.West,
-      Movement.East,
-    ]) {
-      stack.push(movement);
-    }
+    grid.set(xyToString({ x: 0n, y: 0n }), OutputType.Empty);
 
-    let position: XY = { x: 0n, y: 0n };
+    const exploreRecursive = async (position: XY): Promise<void> => {
+      for (const movement of [
+        Movement.North,
+        Movement.South,
+        Movement.West,
+        Movement.East,
+      ]) {
+        const newPosition = structuredClone(position);
+        switch (movement) {
+          case Movement.North:
+            newPosition.y--;
+            break;
+          case Movement.South:
+            newPosition.y++;
+            break;
+          case Movement.West:
+            newPosition.x--;
+            break;
+          case Movement.East:
+            newPosition.x++;
+            break;
+        }
+        const key = xyToString(newPosition);
+        if (grid.has(key)) {
+          continue;
+        }
+        const outputType = await this.move(movement);
+        grid.set(key, outputType);
+        if (outputType !== OutputType.Wall) {
+          await exploreRecursive(newPosition);
+          // Move back to previous position
+          let reverseMovement: Movement;
+          switch (movement) {
+            case Movement.North:
+              reverseMovement = Movement.South;
+              break;
+            case Movement.South:
+              reverseMovement = Movement.North;
+              break;
+            case Movement.West:
+              reverseMovement = Movement.East;
+              break;
+            case Movement.East:
+              reverseMovement = Movement.West;
+              break;
+          }
+          await this.move(reverseMovement);
+        }
+      }
+    };
 
-    while (stack.length) {
-      const movement = stack.pop()!;
-      const outputType = await this.move(movement);
-      const newPosition = structuredClone(position);
-      switch (movement) {
-        case Movement.North:
-          newPosition.y--;
-          break;
-        case Movement.South:
-          newPosition.y++;
-          break;
-        case Movement.West:
-          newPosition.x--;
-          break;
-        case Movement.East:
-          newPosition.x++;
-          break;
-      }
-      const key = xyToString(newPosition);
-      grid.set(key, outputType);
-      switch (outputType) {
-        case OutputType.Wall:
-          break; // Cannot move
-        case OutputType.Empty:
-        case OutputType.OxygenSystem:
-          position = newPosition;
-          const possibleMovements = [
-            Movement.North,
-            Movement.South,
-            Movement.West,
-            Movement.East,
-          ].filter((movement) => {
-            const adjacentPosition = structuredClone(position);
-            switch (movement) {
-              case Movement.North:
-                adjacentPosition.y--;
-                break;
-              case Movement.South:
-                adjacentPosition.y++;
-                break;
-              case Movement.West:
-                adjacentPosition.x--;
-                break;
-              case Movement.East:
-                adjacentPosition.x++;
-                break;
-            }
-            return !grid.has(xyToString(adjacentPosition));
-          });
-          stack.push(...possibleMovements);
-          break;
-      }
-    }
+    await exploreRecursive({ x: 0n, y: 0n });
+
+    return grid;
   }
 
   start(): void {
@@ -350,15 +339,38 @@ class RepairDroid {
     return await outputPromise;
   }
 
-  get shortestPathToOxygenSystem(): number {
-    return 0;
+  shortestPathToOxygenSystem(grid: Map<string, OutputType>): number {
+    type QueueItem = XY & { distance: number };
+    const queue: QueueItem[] = [{ x: 0n, y: 0n, distance: 0 }];
+    const visited = new Set<string>();
+    while (queue.length) {
+      const { x, y, distance } = queue.shift()!;
+      const key = xyToString({ x, y });
+      if (visited.has(key)) {
+        continue;
+      }
+      visited.add(key);
+      const outputType = grid.get(key);
+      if (outputType === OutputType.OxygenSystem) {
+        return distance;
+      }
+      if (outputType === OutputType.Wall || outputType === undefined) {
+        continue;
+      }
+      queue.push({ x: x, y: y - 1n, distance: distance + 1 }); // North
+      queue.push({ x: x, y: y + 1n, distance: distance + 1 }); // South
+      queue.push({ x: x - 1n, y: y, distance: distance + 1 }); // West
+      queue.push({ x: x + 1n, y: y, distance: distance + 1 }); // East
+    }
+    throw Error("Oxygen system not found");
   }
 }
 
 const repairDroid = new RepairDroid();
+repairDroid.start();
 
-repairDroid.explore();
-
-const result = repairDroid.shortestPathToOxygenSystem;
-
-console.log(result); //
+const gridPromise = repairDroid.explore();
+gridPromise.then((grid) => {
+  const result = repairDroid.shortestPathToOxygenSystem(grid);
+  console.log(result); // 230
+});
