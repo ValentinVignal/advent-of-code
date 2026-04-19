@@ -37,8 +37,9 @@ enum ReadType {
 
 class Program {
   constructor(
-    private onOutput: (output: bigint) => void,
-    private onInput: () => bigint,
+    private onOutput: (output: bigint) => Promise<void>,
+    private onInput: () => Promise<bigint>,
+    private halt: (() => Promise<boolean>) | null = null,
   ) {}
 
   private index: bigint = 0n;
@@ -78,12 +79,17 @@ class Program {
     return this._hasHalted;
   }
 
-  run(): void {
+  async run(): Promise<void> {
     while (true) {
+      const shouldHalt = this.halt ? await this.halt() : false;
+      if (shouldHalt) {
+        this._hasHalted = true;
+        return Promise.resolve();
+      }
       const opCode = intCode.get(BigInt(this.index))!;
       if (opCode === BigInt(Instruction.Halt)) {
         this._hasHalted = true;
-        return;
+        return Promise.resolve();
       }
 
       const instruction = Number(opCode % 10n) as Instruction;
@@ -152,14 +158,14 @@ class Program {
           ) as Mode;
           intCode.set(
             this.valueWithMode(address, mode, ReadType.Write),
-            this.onInput(),
+            await this.onInput(),
           );
         } else {
           const mode = Number(
             BigInt(Math.floor(Number(opCode / 100n))) % 10n,
           ) as Mode;
           const value = this.valueWithMode(address, mode);
-          this.onOutput(value);
+          await this.onOutput(value);
         }
         this.index += 2n;
       }
@@ -223,67 +229,67 @@ enum Movement {
   East = 4,
 }
 
-class DepthSearchNode<T> {
-  constructor(public value?: T) {}
+class AwaitablePromise<T> {
+  private promise: Promise<T>;
 
-  private children: DepthSearchNode<T>[] = [];
+  private resolveFunction!: (value: T) => void;
 
-  get hasChildren(): boolean {
-    return !!this.children.length;
-  }
-
-  pop(): T | null {
-    if (!this.children.length) {
-      return null;
-    }
-    const last = this.children[this.children.length - 1];
-    if (last.hasChildren) {
-      return last.pop();
-    } else {
-      this.children.pop();
-      return last.value!;
-    }
-  }
-
-  add(children: T[]): void {
-    if (!this.children.length) {
-      this.children.push(
-        ...children.map((child) => {
-          return new DepthSearchNode(child);
-        }),
-      );
-    } else {
-      this.children[this.children.length - 1].add(children);
-    }
-  }
-}
-
-class DepthSearchTree<T> extends DepthSearchNode<T> {
   constructor() {
-    super();
+    this.promise = new Promise((resolve) => {
+      this.resolveFunction = resolve;
+    });
   }
-}
 
-class HaltError extends Error {
-  constructor() {
-    super();
+  resolve(value: T): void {
+    this.resolveFunction(value);
+  }
+
+  await(): Promise<T> {
+    return this.promise;
   }
 }
 
 class RepairDroid {
   constructor() {}
 
-  private grid = new Map<string, OutputType>();
+  private awaitNextInputPromise = new AwaitablePromise<Movement>();
+  private outputPromise = new AwaitablePromise<OutputType>();
 
-  private depthSearchTree = new DepthSearchTree<Movement>();
-
-  private lastMove: Movement | null = null;
-  private position: XY = { x: 0n, y: 0n };
+  private shouldHalt = false;
 
   program = new Program(
-    (output) => {
-      const newPosition = structuredClone(this.position);
-      switch (this.lastMove!) {
+    async (output) => {
+      this.outputPromise.resolve(Number(output) as OutputType);
+      this.outputPromise = new AwaitablePromise<OutputType>();
+    },
+    async () => {
+      const movement = await this.awaitNextInputPromise.await();
+      this.awaitNextInputPromise = new AwaitablePromise<Movement>();
+
+      return BigInt(movement);
+    },
+    async () => this.shouldHalt,
+  );
+
+  async explore(): Promise<void> {
+    const grid = new Map<string, OutputType>();
+    const stack = [];
+    for (const movement of [
+      Movement.North,
+      Movement.South,
+      Movement.West,
+      Movement.East,
+    ]) {
+      stack.push(movement);
+    }
+
+    let position: XY = { x: 0n, y: 0n };
+
+    while (stack.length) {
+      const movement = stack.pop()!;
+      const outputType = await this.move(movement);
+      const newPosition = structuredClone(position);
+      switch (movement) {
         case Movement.North:
           newPosition.y--;
           break;
@@ -298,40 +304,50 @@ class RepairDroid {
           break;
       }
       const key = xyToString(newPosition);
-      const effectiveOutput = Number(output) as OutputType;
-      this.grid.set(key, effectiveOutput);
-      switch (effectiveOutput) {
+      grid.set(key, outputType);
+      switch (outputType) {
         case OutputType.Wall:
           break; // Cannot move
         case OutputType.Empty:
         case OutputType.OxygenSystem:
-          this.position = newPosition;
-          this.depthSearchTree.add([
+          position = newPosition;
+          const possibleMovements = [
             Movement.North,
             Movement.South,
             Movement.West,
             Movement.East,
-          ]);
-      }
-    },
-    () => {
-      this.lastMove = this.depthSearchTree.pop();
-
-      if (!this.lastMove) {
-        throw new HaltError();
-      }
-      return BigInt(this.lastMove);
-    },
-  );
-
-  explore(): void {
-    try {
-      this.program.run();
-    } catch (error) {
-      if (!(error instanceof HaltError)) {
-        throw error;
+          ].filter((movement) => {
+            const adjacentPosition = structuredClone(position);
+            switch (movement) {
+              case Movement.North:
+                adjacentPosition.y--;
+                break;
+              case Movement.South:
+                adjacentPosition.y++;
+                break;
+              case Movement.West:
+                adjacentPosition.x--;
+                break;
+              case Movement.East:
+                adjacentPosition.x++;
+                break;
+            }
+            return !grid.has(xyToString(adjacentPosition));
+          });
+          stack.push(...possibleMovements);
+          break;
       }
     }
+  }
+
+  start(): void {
+    this.program.run();
+  }
+
+  async move(movement: Movement): Promise<OutputType> {
+    const outputPromise = this.outputPromise.await();
+    this.awaitNextInputPromise.resolve(movement);
+    return await outputPromise;
   }
 
   get shortestPathToOxygenSystem(): number {
@@ -339,10 +355,10 @@ class RepairDroid {
   }
 }
 
-const game = new RepairDroid();
+const repairDroid = new RepairDroid();
 
-game.explore();
+repairDroid.explore();
 
-const result = game.shortestPathToOxygenSystem;
+const result = repairDroid.shortestPathToOxygenSystem;
 
 console.log(result); //
