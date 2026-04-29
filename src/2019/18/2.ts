@@ -37,6 +37,10 @@ const starts = [
   { x: start!.x + 1, y: start!.y + 1 },
 ];
 
+for (const pos of starts) {
+  grid[pos.y][pos.x] = "@";
+}
+
 const keys = new Set<string>();
 
 for (const line of grid) {
@@ -47,41 +51,136 @@ for (const line of grid) {
   }
 }
 
+const getGraph = (): Map<string, Map<string, number>> => {
+  const graph = new Map<string, Map<string, number>>();
+
+  const pointsOfInterest: XY[] = [...starts];
+  for (let y = 0; y < grid.length; y++) {
+    for (let x = 0; x < grid[y].length; x++) {
+      const char = grid[y][x];
+      if (
+        (char >= "a" && char <= "z") ||
+        char === "@" ||
+        (char >= "A" && char <= "Z")
+      ) {
+        pointsOfInterest.push({ x, y });
+      }
+    }
+  }
+
+  for (const point of pointsOfInterest) {
+    const char = grid[point.y][point.x];
+    const startKey =
+      char === "@"
+        ? `@${starts.findIndex(
+            (start) => start.x === point.x && start.y === point.y,
+          )}`
+        : char;
+    const visited = new Set<string>();
+    const queue: { pos: XY; dist: number }[] = [{ pos: point, dist: 0 }];
+
+    while (queue.length) {
+      const { pos, dist } = queue.shift()!;
+      const key = `${pos.x},${pos.y}`;
+      if (visited.has(key)) {
+        continue;
+      }
+      visited.add(key);
+
+      const cell = grid[pos.y][pos.x];
+      if (
+        (cell >= "a" && cell <= "z") ||
+        cell === "@" ||
+        (cell >= "A" && cell <= "Z")
+      ) {
+        const endKey =
+          cell === "@"
+            ? `@${starts.findIndex(
+                (start) => start.x === pos.x && start.y === pos.y,
+              )}`
+            : cell;
+        if (startKey !== endKey) {
+          if (!graph.has(startKey)) {
+            graph.set(startKey, new Map());
+          }
+          graph.get(startKey)!.set(endKey, dist);
+          continue;
+        }
+      }
+
+      for (const [dx, dy] of [
+        [0, 1],
+        [0, -1],
+        [1, 0],
+        [-1, 0],
+      ]) {
+        const newX = pos.x + dx;
+        const newY = pos.y + dy;
+        if (
+          newX >= 0 &&
+          newX < grid[0].length &&
+          newY >= 0 &&
+          newY < grid.length &&
+          grid[newY][newX] !== "#"
+        ) {
+          queue.push({ pos: { x: newX, y: newY }, dist: dist + 1 });
+        }
+      }
+    }
+  }
+
+  return graph;
+};
+
+const graph = getGraph();
+
+const keyToBit = (key: string): number => {
+  if (key >= "a" && key <= "z") {
+    return 1 << (key.charCodeAt(0) - "a".charCodeAt(0));
+  }
+  throw new Error(`Invalid key: ${key}`);
+};
+
+const keyBit = (key: string): number => {
+  return 1 << keyToBit(key)!;
+};
+
+const hasKey = (mask: number, key: string): boolean => {
+  return (mask & keyBit(key)) !== 0;
+};
+
+const addKey = (mask: number, key: string): number => {
+  return mask | keyBit(key);
+};
+
+const allKeysMask = Array.from(keys).reduce(
+  (mask, key) => addKey(mask, key),
+  0,
+);
+
 type State = {
-  positions: XY[];
-  collectedKeys: Set<string>;
+  positions: string[];
+  collectedKeys: number;
 };
 
 const stateToString = (state: State): string => {
-  const keysArray = Array.from(state.collectedKeys).sort();
-  const positionsArray = state.positions
-    .map((pos) => `${pos.x},${pos.y}`)
-    .join(";");
-  return `${positionsArray}:${keysArray.join("")}`;
+  const positionsArray = state.positions.join(";");
+  return `${positionsArray}:${state.collectedKeys}`;
 };
 
-const getNeighbors = function* (xys: XY[]): Generator<XY[]> {
-  for (const xy of xys) {
-    for (const [dx, dy] of [
-      [0, 1],
-      [0, -1],
-      [1, 0],
-      [-1, 0],
-    ]) {
-      const newX = xy.x + dx;
-      const newY = xy.y + dy;
-      if (
-        newX >= 0 &&
-        newX < grid[0].length &&
-        newY >= 0 &&
-        newY < grid.length &&
-        grid[newY][newX] !== "#"
-      ) {
-        const newPositions = xys.map((pos) =>
-          pos.x === xy.x && pos.y === xy.y ? { x: newX, y: newY } : pos,
-        );
-        yield newPositions;
-      }
+const getNeighbors = function* (
+  positions: string[],
+): Generator<{ positions: string[]; distance: number }> {
+  for (const position of positions) {
+    const neighbors = graph.get(position);
+    if (!neighbors) {
+      continue;
+    }
+    for (const [neighbor, distance] of neighbors) {
+      const newPositions = positions.map((pos) =>
+        pos === position ? neighbor : pos,
+      );
+      yield { positions: newPositions, distance };
     }
   }
 };
@@ -93,8 +192,8 @@ type StateWithCount = State & {
 const visit = (): number => {
   const queue: StateWithCount[] = [
     {
-      positions: starts,
-      collectedKeys: new Set(),
+      positions: ["@0", "@1", "@2", "@3"],
+      collectedKeys: 0,
       count: 0,
     },
   ];
@@ -102,12 +201,19 @@ const visit = (): number => {
 
   let i = 0;
   while (queue.length) {
-    if (i++ % 1000000 === 0) {
+    if (i++ % 1000 === 0) {
       console.log(
-        `Queue length: ${queue.length}, visited states: ${visited.size} - ${i} iterations - collected keys: ${queue[0].collectedKeys.size}`,
+        `Queue length: ${queue.length}, visited states: ${
+          visited.size
+        } - ${i} iterations - collected keys: ${queue[0].collectedKeys.toString(
+          2,
+        )}`,
       );
     }
-    const state = queue.shift()!;
+    const index = queue.findIndex(
+      (state) => state.count === Math.min(...queue.map((s) => s.count)),
+    );
+    const state = queue.splice(index, 1)[0];
 
     const stateKey = stateToString(state);
     if (visited.has(stateKey)) {
@@ -116,38 +222,35 @@ const visit = (): number => {
 
     visited.set(stateKey, state.count);
 
-    if (state.collectedKeys.size === keys.size) {
+    if (state.collectedKeys === allKeysMask) {
       return state.count;
     }
 
     for (const neighbor of getNeighbors(state.positions)) {
-      const cells = neighbor.map((pos) => grid[pos.y][pos.x]);
-      const isBlockedByDoor = cells.some(
+      const isBlockedByDoor = neighbor.positions.some(
         (cell) =>
           cell >= "A" &&
           cell <= "Z" &&
-          !state.collectedKeys.has(cell.toLowerCase()),
+          !hasKey(state.collectedKeys, cell.toLowerCase()),
       );
       if (isBlockedByDoor) {
         continue; // Door is locked
       }
 
-      const newCollectedKeys = new Set(state.collectedKeys);
-      for (const cell of cells) {
+      let newCollectedKeys = state.collectedKeys;
+      for (const cell of neighbor.positions) {
         if (cell >= "a" && cell <= "z") {
-          newCollectedKeys.add(cell); // Collect the key
+          newCollectedKeys = addKey(newCollectedKeys, cell); // Collect the key
         }
       }
 
-      const newState: State = {
-        positions: neighbor,
+      const newState: StateWithCount = {
+        positions: neighbor.positions,
         collectedKeys: newCollectedKeys,
+        count: state.count + neighbor.distance,
       };
 
-      queue.push({
-        ...newState,
-        count: state.count + 1,
-      });
+      queue.push(newState);
     }
   }
   throw new Error("No solution found");
