@@ -141,16 +141,12 @@ const keyToBit = (key: string): number => {
   throw new Error(`Invalid key: ${key}`);
 };
 
-const keyBit = (key: string): number => {
-  return 1 << keyToBit(key)!;
-};
-
 const hasKey = (mask: number, key: string): boolean => {
-  return (mask & keyBit(key)) !== 0;
+  return (mask & keyToBit(key)) !== 0;
 };
 
 const addKey = (mask: number, key: string): number => {
-  return mask | keyBit(key);
+  return mask | keyToBit(key);
 };
 
 const allKeysMask = Array.from(keys).reduce(
