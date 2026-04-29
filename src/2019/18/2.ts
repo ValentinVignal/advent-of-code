@@ -181,35 +181,97 @@ const getNeighbors = function* (
   }
 };
 
+class MinHeap<T> {
+  private data: T[] = [];
+  constructor(private readonly score: (item: T) => number) {}
+
+  get size(): number {
+    return this.data.length;
+  }
+
+  push(item: T): void {
+    this.data.push(item);
+    this.bubbleUp(this.data.length - 1);
+  }
+
+  pop(): T | undefined {
+    if (this.data.length === 0) return undefined;
+    const root = this.data[0];
+    const last = this.data.pop()!;
+    if (this.data.length > 0) {
+      this.data[0] = last;
+      this.bubbleDown(0);
+    }
+    return root;
+  }
+
+  private bubbleUp(index: number): void {
+    while (index > 0) {
+      const parent = (index - 1) >> 1;
+      if (this.score(this.data[parent]) <= this.score(this.data[index])) break;
+      [this.data[parent], this.data[index]] = [
+        this.data[index],
+        this.data[parent],
+      ];
+      index = parent;
+    }
+  }
+
+  private bubbleDown(index: number): void {
+    const n = this.data.length;
+    while (true) {
+      let smallest = index;
+      const left = index * 2 + 1;
+      const right = index * 2 + 2;
+
+      if (
+        left < n &&
+        this.score(this.data[left]) < this.score(this.data[smallest])
+      ) {
+        smallest = left;
+      }
+      if (
+        right < n &&
+        this.score(this.data[right]) < this.score(this.data[smallest])
+      ) {
+        smallest = right;
+      }
+      if (smallest === index) break;
+
+      [this.data[index], this.data[smallest]] = [
+        this.data[smallest],
+        this.data[index],
+      ];
+      index = smallest;
+    }
+  }
+}
+
 type StateWithCount = State & {
   count: number;
 };
 
 const visit = (): number => {
-  const queue: StateWithCount[] = [
-    {
-      positions: ["@0", "@1", "@2", "@3"],
-      collectedKeys: 0,
-      count: 0,
-    },
-  ];
+  const queue = new MinHeap<StateWithCount>((state) => state.count);
+  queue.push({
+    positions: ["@0", "@1", "@2", "@3"],
+    collectedKeys: 0,
+    count: 0,
+  });
   let visited = new Map<string, number>();
 
   let i = 0;
-  while (queue.length) {
-    if (i++ % 1000 === 0) {
+  while (queue.size) {
+    const state = queue.pop()!;
+    if (i++ % 1000000 === 0) {
       console.log(
-        `Queue length: ${queue.length}, visited states: ${
+        `Queue length: ${queue.size}, visited states: ${
           visited.size
-        } - ${i} iterations - collected keys: ${queue[0].collectedKeys.toString(
+        } - ${i} iterations - collected keys: ${state.collectedKeys.toString(
           2,
         )}`,
       );
     }
-    const index = queue.findIndex(
-      (state) => state.count === Math.min(...queue.map((s) => s.count)),
-    );
-    const state = queue.splice(index, 1)[0];
 
     const stateKey = stateToString(state);
     if (visited.has(stateKey)) {
@@ -254,4 +316,4 @@ const visit = (): number => {
 
 const result = visit();
 
-console.log(result); //
+console.log(result); // 1940
