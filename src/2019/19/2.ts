@@ -240,86 +240,25 @@ const getOutputForPosition = async ({ x, y }: XY): Promise<bigint> => {
 };
 
 const main = async (): Promise<void> => {
-  let minX: number | undefined;
-  let maxX: number | undefined;
+  let y = 100;
+  let x = 0;
 
-  const maxBound = 10000;
-
-  for (let i = 0; i <= maxBound; i++) {
-    const result = await getOutputForPosition({ x: i, y: maxBound });
-    if (result === 1n) {
-      if (minX === undefined) {
-        minX = i;
-      }
-    } else if (minX !== undefined && maxX === undefined) {
-      maxX = i - 1;
-    }
-
-    if (minX !== undefined && maxX !== undefined) {
-      break;
-    }
-  }
-
-  console.log({ minX, maxX }); // { minX: 7208, maxX: 8938 }
-
-  // Find out how long is the diagonal for y=10000 and x=minX.
-
-  let diagonalLength = 100;
+  let topLeft: XY;
 
   while (true) {
-    const newPosition = {
-      x: minX! + diagonalLength,
-      y: maxBound - diagonalLength,
-    };
-
-    const result = await getOutputForPosition(newPosition);
-
-    if (result === 1n) {
-      diagonalLength++;
-    } else {
+    y++;
+    while ((await getOutputForPosition({ x, y })) === 0n) {
+      x++;
+    }
+    if ((await getOutputForPosition({ x: x + 99, y: y - 99 })) === 1n) {
+      topLeft = { x, y: y - 99 };
       break;
     }
   }
 
-  console.log("diagonalLength", diagonalLength); // 914
+  const result = topLeft.x * 10000 + topLeft.y;
 
-  const calculatedY = (100 / diagonalLength) * maxBound;
-
-  console.log("y", calculatedY); // 1094.0919037199126
-
-  let y = Math.ceil(calculatedY);
-
-  let topLeftCorner: XY;
-
-  while (true) {
-    console.log("y", y);
-    // Find the maxX for this y.
-
-    let maxXForY: number | undefined;
-    for (let x = maxX!; 0 <= x; x--) {
-      const result = await getOutputForPosition({ x, y });
-      if (result === 1n) {
-        maxXForY = x;
-        break;
-      }
-    }
-
-    // Verify the square fits.
-    const bottomLeftResult = await getOutputForPosition({
-      x: maxXForY! - 99,
-      y: y + 99,
-    });
-    if (bottomLeftResult === 0n) {
-      break;
-    }
-    topLeftCorner = { x: maxXForY! - 99, y };
-    y--;
-  }
-
-  const result = 10000 * topLeftCorner!.x + topLeftCorner!.y;
-
-  // x < 7850990 < 8691084 < 8771093
-  console.log(result);
+  console.log(result); // 7830987
 };
 
 main();
