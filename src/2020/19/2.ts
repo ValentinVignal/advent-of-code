@@ -1,14 +1,14 @@
 import { readFileSync } from "fs";
 import * as path from "path";
 
-const example = 2;
+const example = 0;
 
 const textInput = readFileSync(
   path.join(
     __dirname,
-    `input${example ? `-example${example > 1 ? `-${example}` : ""}` : ""}.txt`
+    `input${example ? `-example${example > 1 ? `-${example}` : ""}` : ""}.txt`,
   ),
-  "utf-8"
+  "utf-8",
 );
 
 const [rulesText, messagesText] = textInput.split("\n\n");
@@ -52,7 +52,7 @@ const rules = new Map<number, Rule>(
     }
 
     return [id, rule];
-  })
+  }),
 );
 
 rules.set(8, {
@@ -93,43 +93,25 @@ const matchRules = (message: string): boolean => {
   };
 
   const matchRule11 = (message: string): Match => {
-    let remaining = [message];
-    const allRemaining = [];
-    while (remaining.length) {
-      const result = remaining
-        .map((str) => {
-          const res42 = matchRule(str, 42);
-          if (!res42.matches) {
-            return {
-              matches: false,
-              remaining: [],
-            };
-          }
-          const res31 = res42.remaining
-            .map((s) => matchRule(s, 31))
-            .filter((r) => r.matches);
-          if (!res31.length) {
-            return {
-              matches: false,
-              remaining: [],
-            };
-          }
-          return {
-            matches: true,
-            remaining: res31.flatMap((r) => r.remaining),
-          };
-        })
-        .filter((r) => r.matches);
-      if (!result.length) {
-        break;
+    const allRemaining: string[] = [];
+    for (let n = 1; ; n++) {
+      let rem = [message];
+      for (let i = 0; i < n; i++) {
+        rem = rem.flatMap((s) => {
+          const r = matchRule(s, 42);
+          return r.matches ? r.remaining : [];
+        });
       }
-      remaining = result.flatMap((r) => r.remaining);
-      allRemaining.push(...remaining);
+      if (!rem.length) break;
+      for (let i = 0; i < n; i++) {
+        rem = rem.flatMap((s) => {
+          const r = matchRule(s, 31);
+          return r.matches ? r.remaining : [];
+        });
+      }
+      allRemaining.push(...rem);
     }
-    return {
-      matches: allRemaining.length > 0,
-      remaining: allRemaining,
-    };
+    return { matches: allRemaining.length > 0, remaining: allRemaining };
   };
 
   const matchRule = (message: string, id: number): Match => {
@@ -197,4 +179,4 @@ const matchRules = (message: string): boolean => {
 const results = messages.map((message) => matchRules(message));
 const result = results.filter((r) => r).length;
 
-console.log(result); // 111
+console.log(result); // 343
