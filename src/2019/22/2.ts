@@ -19,12 +19,12 @@ enum Technic {
 
 type ShuffleCut = {
   technic: Technic.Cut;
-  n: number;
+  n: bigint;
 };
 
 type ShuffleDealWithIncrement = {
   technic: Technic.DealWithIncrement;
-  n: number;
+  n: bigint;
 };
 
 type Shuffle =
@@ -36,7 +36,7 @@ type Shuffle =
 
 const shuffles: Shuffle[] = textInput.split("\n").map((line) => {
   if (line.startsWith("cut")) {
-    const n = parseInt(line.split(" ")[1]);
+    const n = BigInt(parseInt(line.split(" ")[1]));
     return {
       technic: Technic.Cut,
       n,
@@ -48,82 +48,126 @@ const shuffles: Shuffle[] = textInput.split("\n").map((line) => {
     };
   }
 
-  const n = parseInt(line.split("deal with increment ")[1]);
+  const n = BigInt(parseInt(line.split("deal with increment ")[1]));
   return {
     technic: Technic.DealWithIncrement,
     n,
   };
 });
 
-const length = 119315717514047;
+const cardCount = 119315717514047n;
+const totalShuffles = 101741582076661n;
 
-const reverseDealIntoNewStack = (index: number): number => {
-  return length - index - 1;
-};
+// All shuffles are a linear transformation y = ax + b.
 
-const reverseCut = (index: number, shuffle: ShuffleCut): number => {
-  if (index <= length - shuffle.n) {
-    return shuffle.n + index;
-  } else {
-    return index - (length - shuffle.n);
-  }
-};
+let a = 1n;
+let b = 0n;
 
-const modInverse = (a: number, m: number): number => {
-  const m0 = m;
-  let x0 = 0;
-  let x1 = 1;
+// Go through all the different shuffles and modify a and b accordingly. This
+// will give us
+// ```
+// shuffle(x) = a * x + b
+// ```
+// for the entire shuffle instructions.
 
-  if (m === 1) {
-    return 0;
-  }
-
-  while (a > 1) {
-    const q = Math.floor(a / m);
-    let t = m;
-
-    m = a % m;
-    a = t;
-    t = x0;
-
-    x0 = x1 - q * x0;
-    x1 = t;
-  }
-
-  if (x1 < 0) {
-    x1 += m0;
-  }
-
-  return x1;
-};
-
-const reverseDealWithIncrement = (
-  index: number,
-  { n }: ShuffleDealWithIncrement,
-): number => {
-  // inverse so (n * inverse) % length === 1
-  const inverse = modInverse(n, length);
-
-  return (index * inverse) % length;
-};
-
-const reverse = (index: number, shuffle: Shuffle): number => {
+for (const shuffle of shuffles) {
   switch (shuffle.technic) {
     case Technic.DealIntoNewStack:
-      return reverseDealIntoNewStack(index);
+      // This reverses the pile. So its formula is
+      // ```
+      // y = cardCount - 1 - x
+      // ```
+      // Hence
+      // ```
+      // s(x) = cardCount - 1 - (a * x + b)
+      //      = -a * x + cardCount - 1 - b
+      // ```
+      a = -a;
+      b = (cardCount - 1n - b) % cardCount;
+      break;
     case Technic.Cut:
-      return reverseCut(index, shuffle);
+      // ```
+      // y = x - n
+      // ```
+      // Hence
+      // ```
+      // s(x) = a * x + b - n
+      // ```
+      b = (b - shuffle.n) % cardCount;
+      break;
     case Technic.DealWithIncrement:
-      return reverseDealWithIncrement(index, shuffle);
+      // ```
+      // y = n * x
+      // ```
+      // Hence
+      // ```
+      // s(x) = n * (a * x + b)
+      //      = (a * n) * x + (b * n)
+      // ```
+      a = (a * shuffle.n) % cardCount;
+      b = (b * shuffle.n) % cardCount;
+      break;
   }
-};
-
-let index = 2020;
-for (const shuffle of shuffles.reverse()) {
-  index = reverse(index, shuffle);
 }
 
-const result = index;
+console.log({ a, b });
 
-// 34709086645976 < 71591241947733 < x
-console.log(result); //
+// We now have `shuffle(x) = s(x) = a * x + b`
+// We do this operation 101741582076661 times:
+// ```
+// completeShuffle(x) = s(s(s(...s(x)))) = s o s o s ... s o
+// ```
+// which is also linear:
+// ```
+// completeShuffle(x) = c * x + d
+// ```
+// cs(x) = a ^ totalShuffles * x + b + b * a + b * a^ 2 + ... + b * a^(totalShuffles - 1)
+//       = a ^ totalShuffles * x + b * (1 + a + a^2 + ... + a^(totalShuffles - 1))
+//       = a ^ totalShuffles * x + b * (a^totalShuffles - 1) / (a - 1)
+// ```
+
+const powModulo = (base: bigint, exponent: bigint, modulo: bigint): bigint => {
+  let result = 1n;
+  let current = base % modulo;
+  let e = exponent;
+  while (e > 0) {
+    if (e % 2n === 1n) {
+      result = (result * current) % modulo;
+    }
+    current = (current * current) % modulo;
+    e = e / 2n;
+  }
+  return result;
+};
+
+const divideModulo = (a: bigint, b: bigint, modulo: bigint): bigint => {
+  // We want to find x such that (b * x) % modulo === a
+  // This is the same as finding the modular inverse of b anj then multiplying it by a.
+  const modInverse = powModulo(b, modulo - 2n, modulo); // Fermat's little theorem
+  return (a * modInverse) % modulo;
+};
+
+const c = powModulo(a, totalShuffles, cardCount);
+const d = divideModulo(
+  b * (powModulo(a, totalShuffles, cardCount) - 1n),
+  a - 1n,
+  cardCount,
+);
+
+console.log({ c, d });
+
+// We now have
+// ```
+// completeShuffle(x) = c * x + d
+// ```
+
+// We want to know which card ends up in position 2020, so we need to solve
+// ```
+// 2020 = y = c * x + d
+//
+// x = (y - d) / c
+// ```
+const result = divideModulo(2020n - d, c, cardCount);
+
+// x != 92365370183771
+console.log("result", result); // 78613970589919
